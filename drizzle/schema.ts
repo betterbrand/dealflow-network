@@ -25,4 +25,129 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+/**
+ * Contacts table - stores people met at networking events
+ */
+export const contacts = mysqlTable("contacts", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  company: varchar("company", { length: 255 }),
+  role: varchar("role", { length: 255 }),
+  location: varchar("location", { length: 255 }),
+  email: varchar("email", { length: 320 }),
+  phone: varchar("phone", { length: 50 }),
+  telegramUsername: varchar("telegramUsername", { length: 255 }),
+  photoUrl: text("photoUrl"),
+  notes: text("notes"),
+  conversationSummary: text("conversationSummary"),
+  actionItems: text("actionItems"),
+  sentiment: varchar("sentiment", { length: 50 }),
+  interestLevel: varchar("interestLevel", { length: 50 }),
+  addedBy: int("addedBy").notNull().references(() => users.id),
+  eventId: int("eventId").references(() => events.id),
+  companyId: int("companyId").references(() => companies.id),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Contact = typeof contacts.$inferSelect;
+export type InsertContact = typeof contacts.$inferInsert;
+
+/**
+ * Companies table - stores organizations that contacts work for
+ */
+export const companies = mysqlTable("companies", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  type: varchar("type", { length: 255 }),
+  description: text("description"),
+  industry: varchar("industry", { length: 255 }),
+  location: varchar("location", { length: 255 }),
+  website: varchar("website", { length: 500 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Company = typeof companies.$inferSelect;
+export type InsertCompany = typeof companies.$inferInsert;
+
+/**
+ * Events table - stores networking events where contacts were made
+ */
+export const events = mysqlTable("events", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  date: timestamp("date"),
+  location: varchar("location", { length: 500 }),
+  type: varchar("type", { length: 100 }),
+  description: text("description"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Event = typeof events.$inferSelect;
+export type InsertEvent = typeof events.$inferInsert;
+
+/**
+ * Conversations table - stores original Telegram conversation metadata
+ */
+export const conversations = mysqlTable("conversations", {
+  id: int("id").autoincrement().primaryKey(),
+  contactId: int("contactId").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  telegramChatId: varchar("telegramChatId", { length: 255 }),
+  rawMessages: text("rawMessages"),
+  capturedBy: int("capturedBy").notNull().references(() => users.id),
+  capturedAt: timestamp("capturedAt").defaultNow().notNull(),
+});
+
+export type Conversation = typeof conversations.$inferSelect;
+export type InsertConversation = typeof conversations.$inferInsert;
+
+/**
+ * Social profiles table - stores LinkedIn, Twitter, and other social media links
+ */
+export const socialProfiles = mysqlTable("socialProfiles", {
+  id: int("id").autoincrement().primaryKey(),
+  contactId: int("contactId").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  platform: varchar("platform", { length: 50 }).notNull(),
+  url: varchar("url", { length: 500 }).notNull(),
+  profileData: text("profileData"),
+  lastEnriched: timestamp("lastEnriched"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SocialProfile = typeof socialProfiles.$inferSelect;
+export type InsertSocialProfile = typeof socialProfiles.$inferInsert;
+
+/**
+ * Contact relationships table - for building the knowledge graph
+ * Stores relationships like "introduced_by", "works_with", "met_at_same_event"
+ */
+export const contactRelationships = mysqlTable("contactRelationships", {
+  id: int("id").autoincrement().primaryKey(),
+  fromContactId: int("fromContactId").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  toContactId: int("toContactId").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  relationshipType: varchar("relationshipType", { length: 100 }).notNull(),
+  strength: int("strength"),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ContactRelationship = typeof contactRelationships.$inferSelect;
+export type InsertContactRelationship = typeof contactRelationships.$inferInsert;
+
+/**
+ * Contact photos table - stores multiple photos per contact
+ */
+export const contactPhotos = mysqlTable("contactPhotos", {
+  id: int("id").autoincrement().primaryKey(),
+  contactId: int("contactId").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  photoUrl: varchar("photoUrl", { length: 500 }).notNull(),
+  fileKey: varchar("fileKey", { length: 500 }).notNull(),
+  uploadedBy: int("uploadedBy").notNull().references(() => users.id),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ContactPhoto = typeof contactPhotos.$inferSelect;
+export type InsertContactPhoto = typeof contactPhotos.$inferInsert;

@@ -1,5 +1,20 @@
 {
   "version": "7",
   "dialect": "mysql",
-  "entries": []
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1762467228973,
+      "tag": "0000_familiar_the_renegades",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1762467318318,
+      "tag": "0001_numerous_quentin_quire",
+      "breakpoints": true
+    }
+  ]
 }
