@@ -47,6 +47,8 @@ export const appRouter = router({
         email: z.string().optional(),
         phone: z.string().optional(),
         telegramUsername: z.string().optional(),
+        linkedinUrl: z.string().optional(),
+        twitterUrl: z.string().optional(),
         notes: z.string().optional(),
         conversationSummary: z.string().optional(),
         actionItems: z.string().optional(),
@@ -57,10 +59,41 @@ export const appRouter = router({
       }))
       .mutation(async ({ input, ctx }) => {
         const { createContact } = await import("./db");
+        const { getDb } = await import("./db");
+        const { socialProfiles } = await import("../drizzle/schema");
+        const { enrichContactBackground } = await import("./enrichment");
+        
         const contactId = await createContact({
           ...input,
           addedBy: ctx.user.id,
         });
+        
+        // Store social profiles and trigger enrichment
+        const db = await getDb();
+        if (db && (input.linkedinUrl || input.twitterUrl)) {
+          const profiles = [];
+          if (input.linkedinUrl) {
+            profiles.push({
+              contactId,
+              platform: "linkedin" as const,
+              url: input.linkedinUrl,
+            });
+          }
+          if (input.twitterUrl) {
+            profiles.push({
+              contactId,
+              platform: "twitter" as const,
+              url: input.twitterUrl,
+            });
+          }
+          await db.insert(socialProfiles).values(profiles);
+          
+          // Start background enrichment
+          enrichContactBackground(contactId, profiles).catch(err => {
+            console.error("Background enrichment failed:", err);
+          });
+        }
+        
         return { id: contactId };
       }),
     

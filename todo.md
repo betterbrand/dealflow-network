@@ -114,3 +114,9 @@
 - [ ] Deal pipeline stages
 - [ ] Revenue tracking
 - [ ] Mobile app
+
+
+## Bugs to Fix
+- [x] Fix "Create New Contact" button not working on Contacts page
+
+- [x] Add LinkedIn and Twitter/X URL fields to contact creation form

@@ -3,9 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Plus } from "lucide-react";
+import { Search } from "lucide-react";
 import { Link } from "wouter";
 import { useState } from "react";
+import { CreateContactDialog } from "@/components/CreateContactDialog";
 
 export default function Contacts() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -30,10 +31,7 @@ export default function Contacts() {
             Manage your networking connections
           </p>
         </div>
-        <Button disabled>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Contact
-        </Button>
+        <CreateContactDialog />
       </div>
 
       <Card>
