@@ -111,6 +111,116 @@ export const appRouter = router({
       return await getContactsForGraph();
     }),
   }),
+  
+  telegram: router({
+    // Process /capture command - extract contact from conversation
+    capture: protectedProcedure
+      .input(z.object({
+        conversationText: z.string(),
+        chatId: z.number(),
+        photos: z.array(z.string()).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { extractContactFromConversation } = await import("./morpheus");
+        const { sendMessage } = await import("./telegram");
+        const { getDb } = await import("./db");
+        const { contacts, socialProfiles } = await import("../drizzle/schema");
+        
+        // Extract contact data using Morpheus AI
+        const extracted = await extractContactFromConversation(input.conversationText);
+        
+        // Create a temporary contact record for confirmation
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        
+        const [contact] = await db.insert(contacts).values({
+          name: extracted.name,
+          company: extracted.company,
+          role: extracted.role,
+          email: extracted.email,
+          phone: extracted.phone,
+          location: extracted.location,
+          telegramUsername: extracted.telegramUsername,
+          conversationSummary: extracted.conversationSummary,
+          actionItems: extracted.actionItems,
+          sentiment: extracted.sentiment,
+          interestLevel: extracted.interestLevel,
+          addedBy: ctx.user.id,
+        }).$returningId();
+        
+        // Store social profiles if found
+        if (extracted.linkedinUrl || extracted.twitterUrl) {
+          const profiles = [];
+          if (extracted.linkedinUrl) {
+            profiles.push({
+              contactId: contact.id,
+              platform: "linkedin" as const,
+              url: extracted.linkedinUrl,
+            });
+          }
+          if (extracted.twitterUrl) {
+            profiles.push({
+              contactId: contact.id,
+              platform: "twitter" as const,
+              url: extracted.twitterUrl,
+            });
+          }
+          await db.insert(socialProfiles).values(profiles);
+        }
+        
+        // Send confirmation message to user
+        const confirmationText = `✅ Contact extracted:\n\n` +
+          `**Name:** ${extracted.name}\n` +
+          `**Company:** ${extracted.company || "N/A"}\n` +
+          `**Role:** ${extracted.role || "N/A"}\n` +
+          `**LinkedIn:** ${extracted.linkedinUrl || "N/A"}\n\n` +
+          `Please confirm to save this contact.`;
+        
+        await sendMessage(input.chatId, confirmationText, {
+          parse_mode: "Markdown",
+        });
+        
+        return {
+          success: true,
+          contactId: contact.id,
+          extracted,
+        };
+      }),
+    
+    // Confirm and finalize contact save
+    confirmSave: protectedProcedure
+      .input(z.object({
+        contactId: z.number(),
+        chatId: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        const { sendMessage } = await import("./telegram");
+        const { enrichContactBackground } = await import("./enrichment");
+        const { getDb } = await import("./db");
+        const { socialProfiles } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        
+        // Get social profiles for enrichment
+        const profiles = await db
+          .select()
+          .from(socialProfiles)
+          .where(eq(socialProfiles.contactId, input.contactId));
+        
+        // Start background enrichment
+        if (profiles.length > 0) {
+          enrichContactBackground(input.contactId, profiles).catch(err => {
+            console.error("Background enrichment failed:", err);
+          });
+        }
+        
+        await sendMessage(input.chatId, "✅ Contact saved successfully! Enriching data in the background...");
+        
+        return { success: true };
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

@@ -35,6 +35,11 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+  
+  // Telegram webhook
+  const { default: telegramWebhookRouter } = await import("../telegramWebhook");
+  app.use("/api/telegram", telegramWebhookRouter);
+  
   // tRPC API
   app.use(
     "/api/trpc",
