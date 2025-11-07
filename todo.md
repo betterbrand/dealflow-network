@@ -120,3 +120,13 @@
 - [x] Fix "Create New Contact" button not working on Contacts page
 
 - [x] Add LinkedIn and Twitter/X URL fields to contact creation form
+
+
+## Critical Issues
+- [x] Fix Knowledge Graph page not executing/rendering (import error in App.tsx)
+- [x] Install Rust and ASIMOV in project environment
+- [x] Integrate ASIMOV Bright Data module for LinkedIn/Twitter scraping
+- [ ] Configure Bright Data API key as secret (user can add via Settings → Secrets)
+- [x] Replace placeholder enrichment service with real ASIMOV integration
+- [ ] Test LinkedIn profile enrichment with ASIMOV
+- [ ] Test Twitter profile enrichment with ASIMOV

@@ -1,9 +1,13 @@
 /**
  * Knowledge Graph Enrichment Service
- * Fetches additional data from LinkedIn and Twitter to enrich contact profiles
+ * Fetches additional data from LinkedIn and Twitter using ASIMOV Bright Data module
  */
 
-import { invokeLLM } from "./_core/llm";
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import path from 'path';
+
+const execAsync = promisify(exec);
 
 export interface EnrichedData {
   fullName?: string;
@@ -27,127 +31,215 @@ export interface EnrichedData {
 }
 
 /**
- * Enrich contact data from LinkedIn URL
- * Note: Direct scraping of LinkedIn is against their ToS and technically difficult
- * This is a placeholder for integration with LinkedIn API or third-party services
+ * Get the path to ASIMOV binaries
+ * In development: use ~/.cargo/bin
+ * In production: use bundled binaries or same path
+ */
+function getAsimovBinaryPath(): string {
+  const homeDir = process.env.HOME || '/home/ubuntu';
+  const cargoBinPath = path.join(homeDir, '.cargo', 'bin');
+  return cargoBinPath;
+}
+
+/**
+ * Enrich contact data from LinkedIn URL using ASIMOV Bright Data module
+ * 
+ * Calls: asimov-brightdata-fetcher https://www.linkedin.com/in/username
+ * Returns: Structured profile data
  */
 export async function enrichFromLinkedIn(linkedinUrl: string): Promise<EnrichedData> {
-  // In production, you would use:
-  // 1. LinkedIn Official API (requires partnership)
-  // 2. Third-party services like Proxycurl, RocketReach, or Clearbit
-  // 3. Web scraping service (legal considerations apply)
-  
-  console.log(`[Enrichment] LinkedIn enrichment requested for: ${linkedinUrl}`);
-  
-  // For MVP, we'll use LLM to extract what we can from the URL structure
-  // and return placeholder data
-  const username = linkedinUrl.split("/in/")[1]?.split("/")[0] || "";
-  
-  return {
-    fullName: username.replace(/-/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
-    headline: "Professional (LinkedIn data pending)",
-    summary: "Full LinkedIn profile data requires API integration or third-party service",
-    socialLinks: [linkedinUrl],
-  };
-}
-
-/**
- * Enrich contact data from Twitter/X URL
- * Uses Twitter API or web scraping
- */
-export async function enrichFromTwitter(twitterUrl: string): Promise<EnrichedData> {
-  // In production, you would use:
-  // 1. Twitter/X Official API (requires API key)
-  // 2. Third-party services
-  // 3. Web scraping service
-  
-  console.log(`[Enrichment] Twitter enrichment requested for: ${twitterUrl}`);
-  
-  const username = twitterUrl.split("/").pop()?.replace("@", "") || "";
-  
-  return {
-    fullName: `@${username}`,
-    headline: "Twitter user (full data pending)",
-    summary: "Full Twitter profile data requires API integration",
-    socialLinks: [twitterUrl],
-  };
-}
-
-/**
- * Use LLM to analyze and extract information from public profile data
- * This can be used when we have scraped HTML or API responses
- */
-export async function extractProfileData(profileHtml: string, source: "linkedin" | "twitter"): Promise<EnrichedData> {
-  const response = await invokeLLM({
-    messages: [
-      {
-        role: "system",
-        content: `You are an expert at extracting structured professional information from ${source} profiles.
-Extract: name, headline, summary, current company, role, location, skills, experience, education.
-Return only valid JSON.`,
-      },
-      {
-        role: "user",
-        content: `Extract professional information from this ${source} profile data:\n\n${profileHtml.substring(0, 4000)}`,
-      },
-    ],
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        name: "profile_extraction",
-        strict: true,
-        schema: {
-          type: "object",
-          properties: {
-            fullName: { type: "string" },
-            headline: { type: "string" },
-            summary: { type: "string" },
-            currentCompany: { type: "string" },
-            currentRole: { type: "string" },
-            location: { type: "string" },
-            skills: {
-              type: "array",
-              items: { type: "string" },
-            },
-            experience: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  company: { type: "string" },
-                  role: { type: "string" },
-                  duration: { type: "string" },
-                },
-                required: ["company", "role"],
-                additionalProperties: false,
-              },
-            },
-            education: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  school: { type: "string" },
-                  degree: { type: "string" },
-                },
-                required: ["school"],
-                additionalProperties: false,
-              },
-            },
-          },
-          required: [],
-          additionalProperties: false,
-        },
-      },
-    },
-  });
-
-  const content = response.choices[0].message.content;
-  if (!content || typeof content !== "string") {
-    throw new Error("No content returned from LLM");
+  if (!process.env.BRIGHTDATA_API_KEY) {
+    console.warn('[Enrichment] BRIGHTDATA_API_KEY not configured, returning placeholder data');
+    const username = linkedinUrl.split("/in/")[1]?.split("/")[0] || "";
+    return {
+      fullName: username.replace(/-/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
+      headline: "Professional (Bright Data API key required)",
+      summary: "Configure BRIGHTDATA_API_KEY in Settings → Secrets to enable enrichment",
+      socialLinks: [linkedinUrl],
+    };
   }
 
-  return JSON.parse(content);
+  try {
+    console.log(`[Enrichment] Fetching LinkedIn profile: ${linkedinUrl}`);
+    
+    const binPath = getAsimovBinaryPath();
+    const fetcherPath = path.join(binPath, 'asimov-brightdata-fetcher');
+    
+    const { stdout, stderr } = await execAsync(
+      `"${fetcherPath}" "${linkedinUrl}"`,
+      {
+        env: {
+          ...process.env,
+          BRIGHTDATA_API_KEY: process.env.BRIGHTDATA_API_KEY,
+          PATH: `${binPath}:${process.env.PATH}`
+        },
+        timeout: 60000 // 60 second timeout
+      }
+    );
+
+    if (stderr) {
+      console.error('[Enrichment] ASIMOV stderr:', stderr);
+    }
+
+    const rawData = JSON.parse(stdout);
+    console.log('[Enrichment] LinkedIn data fetched successfully');
+
+    // Parse the Bright Data response and map to our EnrichedData format
+    return parseLinkedInData(rawData);
+  } catch (error) {
+    console.error('[Enrichment] Error fetching LinkedIn profile:', error);
+    // Return partial data on error
+    return {
+      fullName: "Error fetching profile",
+      summary: error instanceof Error ? error.message : 'Unknown error',
+      socialLinks: [linkedinUrl],
+    };
+  }
+}
+
+/**
+ * Enrich contact data from Twitter/X URL using ASIMOV Bright Data module
+ */
+export async function enrichFromTwitter(twitterUrl: string): Promise<EnrichedData> {
+  if (!process.env.BRIGHTDATA_API_KEY) {
+    console.warn('[Enrichment] BRIGHTDATA_API_KEY not configured, returning placeholder data');
+    const username = twitterUrl.split("/").pop()?.replace("@", "") || "";
+    return {
+      fullName: `@${username}`,
+      headline: "Twitter user (Bright Data API key required)",
+      summary: "Configure BRIGHTDATA_API_KEY in Settings → Secrets to enable enrichment",
+      socialLinks: [twitterUrl],
+    };
+  }
+
+  try {
+    console.log(`[Enrichment] Fetching Twitter profile: ${twitterUrl}`);
+    
+    const binPath = getAsimovBinaryPath();
+    const fetcherPath = path.join(binPath, 'asimov-brightdata-fetcher');
+    
+    const { stdout, stderr } = await execAsync(
+      `"${fetcherPath}" "${twitterUrl}"`,
+      {
+        env: {
+          ...process.env,
+          BRIGHTDATA_API_KEY: process.env.BRIGHTDATA_API_KEY,
+          PATH: `${binPath}:${process.env.PATH}`
+        },
+        timeout: 60000 // 60 second timeout
+      }
+    );
+
+    if (stderr) {
+      console.error('[Enrichment] ASIMOV stderr:', stderr);
+    }
+
+    const rawData = JSON.parse(stdout);
+    console.log('[Enrichment] Twitter data fetched successfully');
+
+    // Parse the Bright Data response and map to our EnrichedData format
+    return parseTwitterData(rawData);
+  } catch (error) {
+    console.error('[Enrichment] Error fetching Twitter profile:', error);
+    // Return partial data on error
+    return {
+      fullName: "Error fetching profile",
+      summary: error instanceof Error ? error.message : 'Unknown error',
+      socialLinks: [twitterUrl],
+    };
+  }
+}
+
+/**
+ * Parse LinkedIn data from Bright Data response
+ * The exact structure depends on what Bright Data returns
+ */
+function parseLinkedInData(data: any): EnrichedData {
+  const enriched: EnrichedData = {
+    socialLinks: [],
+    skills: [],
+    experience: [],
+    education: [],
+  };
+
+  // Map common LinkedIn fields
+  // Note: Adjust these based on actual Bright Data response structure
+  if (data.name || data.full_name || data.fullName) {
+    enriched.fullName = data.name || data.full_name || data.fullName;
+  }
+  
+  if (data.headline) {
+    enriched.headline = data.headline;
+  }
+  
+  if (data.summary || data.about) {
+    enriched.summary = data.summary || data.about;
+  }
+  
+  if (data.location) {
+    enriched.location = data.location;
+  }
+  
+  if (data.current_company || data.currentCompany) {
+    enriched.currentCompany = data.current_company || data.currentCompany;
+  }
+  
+  if (data.current_role || data.currentRole) {
+    enriched.currentRole = data.current_role || data.currentRole;
+  }
+  
+  if (data.skills && Array.isArray(data.skills)) {
+    enriched.skills = data.skills;
+  }
+  
+  if (data.experience && Array.isArray(data.experience)) {
+    enriched.experience = data.experience.map((exp: any) => ({
+      company: exp.company || exp.company_name || '',
+      role: exp.title || exp.role || '',
+      duration: exp.duration || exp.dates || ''
+    }));
+  }
+  
+  if (data.education && Array.isArray(data.education)) {
+    enriched.education = data.education.map((edu: any) => ({
+      school: edu.school || edu.school_name || '',
+      degree: edu.degree || edu.field_of_study || ''
+    }));
+  }
+  
+  if (data.connections || data.connection_count) {
+    enriched.connections = data.connections || data.connection_count;
+  }
+
+  return enriched;
+}
+
+/**
+ * Parse Twitter data from Bright Data response
+ */
+function parseTwitterData(data: any): EnrichedData {
+  const enriched: EnrichedData = {
+    socialLinks: [],
+  };
+
+  // Map common Twitter fields
+  if (data.name) {
+    enriched.fullName = data.name;
+  }
+  
+  if (data.description || data.bio) {
+    enriched.summary = data.description || data.bio;
+  }
+  
+  if (data.location) {
+    enriched.location = data.location;
+  }
+  
+  if (data.headline || data.tagline) {
+    enriched.headline = data.headline || data.tagline;
+  }
+
+  return enriched;
 }
 
 /**
