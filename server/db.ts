@@ -344,3 +344,45 @@ export async function deleteRelationship(id: number) {
   await db.delete(contactRelationships).where(eq(contactRelationships.id, id));
   return { success: true };
 }
+
+
+/**
+ * Update contact with enriched data from LinkedIn/Twitter
+ */
+export async function updateContactEnrichment(
+  contactId: number,
+  enrichedData: {
+    summary?: string;
+    profilePictureUrl?: string;
+    experience?: Array<any>;
+    education?: Array<any>;
+    skills?: string[];
+  }
+): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot update contact enrichment: database not available");
+    return;
+  }
+
+  try {
+    const updateData: Record<string, any> = {};
+    
+    if (enrichedData.summary) updateData.summary = enrichedData.summary;
+    if (enrichedData.profilePictureUrl) updateData.profilePictureUrl = enrichedData.profilePictureUrl;
+    if (enrichedData.experience) updateData.experience = JSON.stringify(enrichedData.experience);
+    if (enrichedData.education) updateData.education = JSON.stringify(enrichedData.education);
+    if (enrichedData.skills) updateData.skills = JSON.stringify(enrichedData.skills);
+
+    if (Object.keys(updateData).length > 0) {
+      await db.update(contacts)
+        .set(updateData)
+        .where(eq(contacts.id, contactId));
+      
+      console.log(`[Database] Updated contact ${contactId} with enriched data`);
+    }
+  } catch (error) {
+    console.error(`[Database] Failed to update contact enrichment:`, error);
+    throw error;
+  }
+}

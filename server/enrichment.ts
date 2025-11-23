@@ -7,6 +7,7 @@
  */
 
 import { enrichLinkedInProfile, enrichTwitterProfile, type EnrichedProfile } from "./enrichment-adapter";
+import { updateContactEnrichment } from "./db";
 
 /**
  * Enrich a contact by fetching data from all available social profiles
@@ -88,14 +89,17 @@ export async function enrichContactBackground(
       return;
     }
     
-    // TODO: Update the contact in the database with enriched data
-    // This should update fields like:
-    // - headline, summary, location
-    // - experience, education, skills
-    // - semantic graph data
+    // Update the contact in the database with enriched data
+    await updateContactEnrichment(contactId, {
+      summary: enrichedData.summary,
+      profilePictureUrl: enrichedData.profilePictureUrl,
+      experience: enrichedData.experience,
+      education: enrichedData.education,
+      skills: enrichedData.skills,
+    });
     
     console.log(`[Enrichment] Enrichment complete for contact ${contactId}`);
-    console.log(`[Enrichment] Preview:`, JSON.stringify(enrichedData, null, 2).substring(0, 300));
+    console.log(`[Enrichment] Saved: ${enrichedData.experience?.length || 0} experience entries, ${enrichedData.education?.length || 0} education entries, ${enrichedData.skills?.length || 0} skills`);
     
   } catch (error) {
     console.error(`[Enrichment] Failed to enrich contact ${contactId}:`, error);
