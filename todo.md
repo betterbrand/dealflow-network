@@ -155,3 +155,19 @@
 - [ ] Add relationship creation from contact detail page
 - [ ] Display existing relationships in contact detail view
 - [ ] Add ability to edit/delete relationships from UI
+
+
+## Contact Detail Page Enhancement
+- [x] Add backend procedure to fetch full contact data with relationships
+- [x] Add enrichment fields to database schema (linkedinUrl, twitterUrl, summary, profilePictureUrl, experience, education, skills)
+- [x] Display enriched LinkedIn data (experience, education, skills) when available
+- [x] Show relationship history with other contacts
+- [x] Display social media profile links (LinkedIn, Twitter) with external link buttons
+- [x] Add conversation notes section
+- [x] Show contact provenance (added date, last updated)
+- [x] Add "Add Relationship" button to create new relationships from contact page
+- [x] Display profile picture when available
+- [x] Add Quick Actions sidebar (View in Graph, Send Email)
+- [x] Parse JSON fields (experience, education, skills) for display
+- [ ] Add edit button and edit mode for contact information
+- [ ] Complete enrichment service to populate LinkedIn/Twitter data automatically

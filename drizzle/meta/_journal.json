@@ -15,6 +15,13 @@
       "when": 1762467318318,
       "tag": "0001_numerous_quentin_quire",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1763912893430,
+      "tag": "0002_far_fat_cobra",
+      "breakpoints": true
     }
   ]
 }

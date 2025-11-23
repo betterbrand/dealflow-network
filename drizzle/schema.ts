@@ -43,6 +43,14 @@ export const contacts = mysqlTable("contacts", {
   actionItems: text("actionItems"),
   sentiment: varchar("sentiment", { length: 50 }),
   interestLevel: varchar("interestLevel", { length: 50 }),
+  // Enriched data from LinkedIn/Twitter
+  linkedinUrl: varchar("linkedinUrl", { length: 500 }),
+  twitterUrl: varchar("twitterUrl", { length: 500 }),
+  summary: text("summary"),
+  profilePictureUrl: text("profilePictureUrl"),
+  experience: text("experience"), // JSON array
+  education: text("education"), // JSON array
+  skills: text("skills"), // JSON array
   addedBy: int("addedBy").notNull().references(() => users.id),
   eventId: int("eventId").references(() => events.id),
   companyId: int("companyId").references(() => companies.id),
