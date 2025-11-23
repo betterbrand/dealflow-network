@@ -180,3 +180,15 @@
 - [x] Test enrichment with real LinkedIn profile (Satya Nadella - 5 experience, 3 education entries)
 - [x] Add error handling for failed enrichment attempts
 - [x] Create automated test script for enrichment verification
+
+
+## Contact Editing Feature
+- [x] Implement backend update procedure for contacts
+- [x] Create edit contact dialog/form component with all fields
+- [x] Add validation for required fields and LinkedIn URL format
+- [x] Integrate "Edit Contact" button into contact detail page
+- [x] Support adding LinkedIn URLs to existing contacts (trigger enrichment on save)
+- [x] Allow manual correction of auto-enriched data
+- [x] Test editing workflow end-to-end (successfully updated Satya Nadella's email)
+- [x] Verify UI auto-refreshes after saving changes
+- [ ] Test enrichment re-trigger when LinkedIn URL is changed on existing contact

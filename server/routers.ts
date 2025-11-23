@@ -106,12 +106,79 @@ export const appRouter = router({
         location: z.string().optional(),
         email: z.string().optional(),
         phone: z.string().optional(),
+        telegramUsername: z.string().optional(),
+        linkedinUrl: z.string().optional(),
+        twitterUrl: z.string().optional(),
         notes: z.string().optional(),
+        conversationSummary: z.string().optional(),
+        actionItems: z.string().optional(),
+        sentiment: z.string().optional(),
+        interestLevel: z.string().optional(),
+        eventId: z.number().optional(),
+        companyId: z.number().optional(),
       }))
       .mutation(async ({ input }) => {
-        const { updateContact } = await import("./db");
-        const { id, ...data } = input;
-        await updateContact(id, data);
+        const { updateContact, getContactById } = await import("./db");
+        const { getDb } = await import("./db");
+        const { socialProfiles } = await import("../drizzle/schema");
+        const { enrichContactBackground } = await import("./enrichment");
+        const { eq, and } = await import("drizzle-orm");
+        
+        const { id, linkedinUrl, twitterUrl, ...data } = input;
+        
+        // Get existing contact to check if LinkedIn URL changed
+        const existingContact = await getContactById(id);
+        const linkedinUrlChanged = linkedinUrl && linkedinUrl !== existingContact?.linkedinUrl;
+        const twitterUrlChanged = twitterUrl && twitterUrl !== existingContact?.twitterUrl;
+        
+        // Update contact
+        await updateContact(id, { ...data, linkedinUrl, twitterUrl });
+        
+        // Update social profiles and trigger enrichment if URLs changed
+        const db = await getDb();
+        if (db && (linkedinUrlChanged || twitterUrlChanged)) {
+          const profiles = [];
+          
+          if (linkedinUrlChanged && linkedinUrl) {
+            // Delete old LinkedIn profile if exists
+            await db.delete(socialProfiles)
+              .where(and(
+                eq(socialProfiles.contactId, id),
+                eq(socialProfiles.platform, "linkedin")
+              ));
+            
+            profiles.push({
+              contactId: id,
+              platform: "linkedin" as const,
+              url: linkedinUrl,
+            });
+          }
+          
+          if (twitterUrlChanged && twitterUrl) {
+            // Delete old Twitter profile if exists
+            await db.delete(socialProfiles)
+              .where(and(
+                eq(socialProfiles.contactId, id),
+                eq(socialProfiles.platform, "twitter")
+              ));
+            
+            profiles.push({
+              contactId: id,
+              platform: "twitter" as const,
+              url: twitterUrl,
+            });
+          }
+          
+          if (profiles.length > 0) {
+            await db.insert(socialProfiles).values(profiles);
+            
+            // Start background enrichment
+            enrichContactBackground(id, profiles).catch(err => {
+              console.error("Background enrichment failed:", err);
+            });
+          }
+        }
+        
         return { success: true };
       }),
     
@@ -262,7 +329,7 @@ export const appRouter = router({
         const { enrichContactBackground } = await import("./enrichment");
         const { getDb } = await import("./db");
         const { socialProfiles } = await import("../drizzle/schema");
-        const { eq } = await import("drizzle-orm");
+        const { eq, and } = await import("drizzle-orm");
         
         const db = await getDb();
         if (!db) throw new Error("Database not available");

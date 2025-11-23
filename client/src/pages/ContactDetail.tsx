@@ -7,12 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useState } from "react";
 import { AddRelationshipDialog } from "@/components/AddRelationshipDialog";
+import { EditContactDialog } from "@/components/EditContactDialog";
 
 export default function ContactDetail() {
   const params = useParams();
   const contactId = params.id ? parseInt(params.id) : 0;
   const [, setLocation] = useLocation();
   const [showAddRelationshipDialog, setShowAddRelationshipDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   
   const { data: contact, isLoading, refetch } = trpc.contacts.get.useQuery({ id: contactId });
   const { data: relationships, refetch: refetchRelationships } = trpc.relationships.getForContact.useQuery({ contactId });
@@ -75,11 +77,11 @@ export default function ContactDetail() {
           </Link>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowAddRelationshipDialog(true)}>
+          <Button onClick={() => setShowAddRelationshipDialog(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Relationship
           </Button>
-          <Button variant="outline" disabled>
+          <Button variant="outline" onClick={() => setShowEditDialog(true)}>
             Edit Contact
           </Button>
         </div>
@@ -404,6 +406,16 @@ export default function ContactDetail() {
         open={showAddRelationshipDialog}
         onOpenChange={setShowAddRelationshipDialog}
         onSuccess={handleRelationshipSuccess}
+      />
+      
+      <EditContactDialog
+        contact={contact}
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+        onSuccess={() => {
+          refetch();
+          refetchRelationships();
+        }}
       />
     </div>
   );
