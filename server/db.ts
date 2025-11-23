@@ -1,6 +1,10 @@
-import { eq } from "drizzle-orm";
+import { eq, sql, and, desc, like, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { 
+  InsertUser, users, 
+  contacts, companies, events, conversations, socialProfiles, contactRelationships, contactPhotos,
+  InsertContact, InsertCompany, InsertEvent, InsertConversation, InsertSocialProfile, InsertContactPhoto, InsertContactRelationship
+} from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,8 +93,7 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-import { contacts, companies, events, conversations, socialProfiles, contactRelationships, contactPhotos, InsertContact, InsertCompany, InsertEvent, InsertConversation, InsertSocialProfile, InsertContactPhoto } from "../drizzle/schema";
-import { and, desc, like, or, sql } from "drizzle-orm";
+
 
 // ========== CONTACTS ==========
 
@@ -282,4 +285,62 @@ export async function getContactsForGraph() {
   }));
   
   return { nodes, links };
+}
+
+// ========== RELATIONSHIPS ==========
+
+export async function createRelationship(data: InsertContactRelationship) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const [result] = await db.insert(contactRelationships).values(data);
+  return result;
+}
+
+export async function getRelationshipsForContact(contactId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  // Get relationships where this contact is either the source or target
+  const outgoing = await db
+    .select({
+      id: contactRelationships.id,
+      fromContactId: contactRelationships.fromContactId,
+      toContactId: contactRelationships.toContactId,
+      relationshipType: contactRelationships.relationshipType,
+      strength: contactRelationships.strength,
+      notes: contactRelationships.notes,
+      createdAt: contactRelationships.createdAt,
+      relatedContact: contacts,
+      direction: sql<'outgoing'>`'outgoing'`,
+    })
+    .from(contactRelationships)
+    .innerJoin(contacts, eq(contactRelationships.toContactId, contacts.id))
+    .where(eq(contactRelationships.fromContactId, contactId));
+  
+  const incoming = await db
+    .select({
+      id: contactRelationships.id,
+      fromContactId: contactRelationships.fromContactId,
+      toContactId: contactRelationships.toContactId,
+      relationshipType: contactRelationships.relationshipType,
+      strength: contactRelationships.strength,
+      notes: contactRelationships.notes,
+      createdAt: contactRelationships.createdAt,
+      relatedContact: contacts,
+      direction: sql<'incoming'>`'incoming'`,
+    })
+    .from(contactRelationships)
+    .innerJoin(contacts, eq(contactRelationships.fromContactId, contacts.id))
+    .where(eq(contactRelationships.toContactId, contactId));
+  
+  return [...outgoing, ...incoming];
+}
+
+export async function deleteRelationship(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.delete(contactRelationships).where(eq(contactRelationships.id, id));
+  return { success: true };
 }

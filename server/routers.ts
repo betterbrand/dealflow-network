@@ -145,6 +145,37 @@ export const appRouter = router({
     }),
   }),
   
+  relationships: router({
+    create: protectedProcedure
+      .input(z.object({
+        fromContactId: z.number(),
+        toContactId: z.number(),
+        relationshipType: z.string(),
+        strength: z.number().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { createRelationship } = await import("./db");
+        await createRelationship(input);
+        return { success: true };
+      }),
+    
+    getForContact: protectedProcedure
+      .input(z.object({ contactId: z.number() }))
+      .query(async ({ input }) => {
+        const { getRelationshipsForContact } = await import("./db");
+        return await getRelationshipsForContact(input.contactId);
+      }),
+    
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const { deleteRelationship } = await import("./db");
+        await deleteRelationship(input.id);
+        return { success: true };
+      }),
+  }),
+  
   telegram: router({
     // Process /capture command - extract contact from conversation
     capture: protectedProcedure

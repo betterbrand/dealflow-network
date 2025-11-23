@@ -41,7 +41,10 @@
 - [x] Implement Twitter profile scraping/fetching
 - [x] Parse and extract additional data (job history, skills, connections)
 - [x] Update contact records with enriched data asynchronously
-- [ ] Implement web scraping service integration (requires third-party API)
+- [x] Implement enrichment adapter with Manus LinkedIn API
+- [x] Test enrichment adapter with real LinkedIn profiles
+- [ ] Add ASIMOV semantic transformation (RDF/JSON-LD) for knowledge graph
+- [ ] Implement Twitter enrichment via Manus API
 
 ## Phase 6: Frontend - Dashboard & Layout
 - [x] Design color scheme and typography
@@ -60,12 +63,16 @@
 - [ ] Handle contact deduplication UI
 
 ## Phase 8: Frontend - Knowledge Graph Visualization
-- [x] Install and configure ASIMOV graph widget (react-force-graph)
+- [x] Install and configure react-force-graph-2d
 - [x] Create graph visualization page
+- [x] Implement interactive force-directed graph layout
+- [x] Implement node click to navigate to contact details
+- [x] Add node labels with company information
+- [x] Add auto-zoom and fit to view
+- [x] Display helpful tip when no relationships exist
 - [ ] Implement 2D/3D toggle
-- [ ] Implement node click to show contact details
 - [ ] Implement graph filtering (by event, company, team member)
-- [ ] Add zoom, pan, rotate controls
+- [ ] Add UI for creating relationships between contacts
 
 ## Phase 9: Frontend - Natural Language Search
 - [ ] Create search interface with query input
@@ -122,11 +129,29 @@
 - [x] Add LinkedIn and Twitter/X URL fields to contact creation form
 
 
-## Critical Issues
-- [x] Fix Knowledge Graph page not executing/rendering (import error in App.tsx)
-- [x] Install Rust and ASIMOV in project environment
-- [x] Integrate ASIMOV Bright Data module for LinkedIn/Twitter scraping
-- [ ] Configure Bright Data API key as secret (user can add via Settings → Secrets)
-- [x] Replace placeholder enrichment service with real ASIMOV integration
-- [ ] Test LinkedIn profile enrichment with ASIMOV
-- [ ] Test Twitter profile enrichment with ASIMOV
+## Technical Debt - Temporary Solutions
+- [ ] **FOR ELECTRON VERSION**: Implement pure ASIMOV+Bright Data integration
+  - Location: `server/enrichment-adapter.ts`
+  - Current: Using Manus LinkedIn API for web MVP (serverless can't run Rust binaries)
+  - Future: Bundle ASIMOV Rust binaries with Electron app for offline operation
+  - The adapter pattern is ready - just need to bundle binaries and set USE_PURE_ASIMOV=true
+  - Test: `server/test-asimov-brightdata.ts` (will work in Electron with bundled binaries)
+  - Note: This is NOT technical debt for the web MVP - it's the correct architecture
+
+
+## Bug Fixes
+- [x] Fix knowledge graph visualization - currently showing empty graph despite having contacts in database
+
+- [ ] Investigate and fix: Published site (dealflownet-xrj2t4w7.manus.space/graph) not showing graph visualization despite checkpoint a1113141 being published (waiting for Manus support to fix git sync issue)
+
+## Phase 10: Relationship Creation UI
+- [x] Create tRPC procedures for relationship CRUD operations
+- [x] Build relationship creation dialog/modal component
+- [x] Add relationship type selector (introduced_by, works_with, investor_in, mentor_of, etc.)
+- [x] Implement contact-to-contact selector with search
+- [x] Add relationship creation button to graph page
+- [x] Update graph visualization to show relationship edges with labels
+- [x] Write and pass vitest tests for relationship CRUD (4/4 tests passing)
+- [ ] Add relationship creation from contact detail page
+- [ ] Display existing relationships in contact detail view
+- [ ] Add ability to edit/delete relationships from UI
