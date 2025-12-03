@@ -13,6 +13,7 @@ export default function Graph() {
   const [, setLocation] = useLocation();
   const graphRef = useRef<any>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [hoveredNode, setHoveredNode] = useState<any>(null);
 
   // Auto-fit graph when data loads
   useEffect(() => {
@@ -20,6 +21,13 @@ export default function Graph() {
       graphRef.current.zoomToFit(400, 50);
     }
   }, [graphData]);
+
+  // Force canvas refresh when hover state changes
+  useEffect(() => {
+    if (graphRef.current) {
+      graphRef.current.refresh();
+    }
+  }, [hoveredNode]);
 
   const handleNodeClick = useCallback((node: any) => {
     setLocation(`/contacts/${node.id}`);
@@ -129,44 +137,78 @@ export default function Graph() {
                 linkDirectionalParticleWidth={2}
                 linkDirectionalParticleSpeed={0.005}
                 linkLabel={(link: any) => link.type?.replace(/_/g, ' ') || ''}
+                onNodeHover={(node: any) => setHoveredNode(node)}
                 linkCanvasObject={(link: any, ctx: CanvasRenderingContext2D) => {
                   if (!link.source || !link.target) return;
                   
                   const start = link.source;
                   const end = link.target;
                   
+                  // Only show label if one of the connected nodes is hovered
+                  const shouldShowLabel = hoveredNode && (link.source.id === hoveredNode.id || link.target.id === hoveredNode.id);
+                  
                   // Draw the link line
                   ctx.beginPath();
                   ctx.moveTo(start.x, start.y);
                   ctx.lineTo(end.x, end.y);
-                  ctx.strokeStyle = '#9ca3af';
-                  ctx.lineWidth = 2;
+                  ctx.strokeStyle = shouldShowLabel ? '#3b82f6' : '#9ca3af';
+                  ctx.lineWidth = shouldShowLabel ? 3 : 2;
                   ctx.stroke();
                   
-                  // Draw relationship label
-                  if (link.type) {
+                  // Draw relationship label only if node is hovered
+                  if (link.type && shouldShowLabel) {
                     const label = link.type.replace(/_/g, ' ');
                     const midX = (start.x + end.x) / 2;
                     const midY = (start.y + end.y) / 2;
                     
-                    ctx.font = '10px Inter, sans-serif';
+                    // Calculate perpendicular offset to position label above the line
+                    const dx = end.x - start.x;
+                    const dy = end.y - start.y;
+                    const length = Math.sqrt(dx * dx + dy * dy);
+                    const offsetDistance = 15; // Distance to offset label from line
+                    const offsetX = -(dy / length) * offsetDistance;
+                    const offsetY = (dx / length) * offsetDistance;
+                    
+                    const labelX = midX + offsetX;
+                    const labelY = midY + offsetY;
+                    
+                    ctx.font = 'bold 12px Inter, sans-serif';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     
-                    // Draw label background
+                    // Draw label background with border
                     const textWidth = ctx.measureText(label).width;
-                    const padding = 4;
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-                    ctx.fillRect(
-                      midX - textWidth/2 - padding,
-                      midY - 6 - padding,
-                      textWidth + padding * 2,
-                      12 + padding * 2
-                    );
+                    const padding = 6;
+                    const borderRadius = 4;
+                    
+                    // Background
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.98)';
+                    ctx.strokeStyle = '#e5e7eb';
+                    ctx.lineWidth = 1;
+                    
+                    const rectX = labelX - textWidth/2 - padding;
+                    const rectY = labelY - 7 - padding;
+                    const rectWidth = textWidth + padding * 2;
+                    const rectHeight = 14 + padding * 2;
+                    
+                    // Draw rounded rectangle
+                    ctx.beginPath();
+                    ctx.moveTo(rectX + borderRadius, rectY);
+                    ctx.lineTo(rectX + rectWidth - borderRadius, rectY);
+                    ctx.quadraticCurveTo(rectX + rectWidth, rectY, rectX + rectWidth, rectY + borderRadius);
+                    ctx.lineTo(rectX + rectWidth, rectY + rectHeight - borderRadius);
+                    ctx.quadraticCurveTo(rectX + rectWidth, rectY + rectHeight, rectX + rectWidth - borderRadius, rectY + rectHeight);
+                    ctx.lineTo(rectX + borderRadius, rectY + rectHeight);
+                    ctx.quadraticCurveTo(rectX, rectY + rectHeight, rectX, rectY + rectHeight - borderRadius);
+                    ctx.lineTo(rectX, rectY + borderRadius);
+                    ctx.quadraticCurveTo(rectX, rectY, rectX + borderRadius, rectY);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
                     
                     // Draw label text
-                    ctx.fillStyle = '#6b7280';
-                    ctx.fillText(label, midX, midY);
+                    ctx.fillStyle = '#374151';
+                    ctx.fillText(label, labelX, labelY);
                   }
                 }}
                 linkCanvasObjectMode={() => 'replace'}

@@ -192,3 +192,6 @@
 - [x] Test editing workflow end-to-end (successfully updated Satya Nadella's email)
 - [x] Verify UI auto-refreshes after saving changes
 - [ ] Test enrichment re-trigger when LinkedIn URL is changed on existing contact
+
+- [x] Fix graph relationship labels - currently overlapping with nodes and unreadable
+- [x] Make relationship labels only visible on hover/click for cleaner default view
