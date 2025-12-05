@@ -195,3 +195,12 @@
 
 - [x] Fix graph relationship labels - currently overlapping with nodes and unreadable
 - [x] Make relationship labels only visible on hover/click for cleaner default view
+
+
+## Graph Scalability Improvements
+- [x] Implement responsive graph sizing (use container dimensions instead of fixed 1000x600)
+- [x] Add fullscreen mode toggle button
+- [x] Increase node and label sizes for better readability
+- [x] Test graph at different screen sizes
+- [x] Add smooth transitions between normal and fullscreen views
+- [x] Verify fullscreen controls (Refresh and Minimize buttons)
