@@ -204,3 +204,5 @@
 - [x] Test graph at different screen sizes
 - [x] Add smooth transitions between normal and fullscreen views
 - [x] Verify fullscreen controls (Refresh and Minimize buttons)
+
+- [x] Fix Vite HMR WebSocket connection error (failing to connect to dev server)
