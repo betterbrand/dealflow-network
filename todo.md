@@ -208,3 +208,25 @@
 - [x] Fix Vite HMR WebSocket connection error (failing to connect to dev server)
 
 - [x] Set up GitHub Actions CI/CD workflow for automated testing and building
+
+
+## GitHub Actions Configuration
+- [x] Add GitHub Secrets for CI/CD pipeline (DATABASE_URL, JWT_SECRET, OAUTH_SERVER_URL, etc.)
+
+## Companies Feature Implementation
+- [x] Create companies table schema and backend procedures
+- [x] Build company profile pages showing aggregated contacts
+- [x] Add company-level relationship tracking
+- [x] Display company insights (number of contacts, relationship strength)
+- [x] Link contacts to their companies in the UI
+- [x] Add company filtering and search
+
+## Graph Filtering Controls
+- [x] Add filter UI controls to Knowledge Graph page
+- [x] Implement filter by company
+- [x] Implement filter by relationship type
+- [ ] Implement filter by date range
+- [ ] Implement filter by event
+- [x] Add "Clear All Filters" button
+- [x] Show active filter badges
+- [x] Update graph visualization based on active filters

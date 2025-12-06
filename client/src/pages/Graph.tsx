@@ -1,14 +1,13 @@
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Network, RefreshCw, Plus, Maximize2, Minimize2 } from "lucide-react";
+import { Network, RefreshCw, Plus, Maximize2, Minimize2, Filter, X } from "lucide-react";
 import { useRef, useCallback, useEffect, useState } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 import { useLocation } from "wouter";
 import { AddRelationshipDialog } from "@/components/AddRelationshipDialog";
 
 export default function Graph() {
-  const { data: graphData, isLoading, refetch } = trpc.graph.getData.useQuery();
   const [, setLocation] = useLocation();
   const graphRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -16,6 +15,39 @@ export default function Graph() {
   const [hoveredNode, setHoveredNode] = useState<any>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [dimensions, setDimensions] = useState({ width: 1000, height: 600 });
+  const [filters, setFilters] = useState({
+    company: "",
+    relationshipType: "",
+    showFilters: false,
+  });
+
+  const { data: rawGraphData, isLoading, refetch } = trpc.graph.getData.useQuery();
+  const { data: companies } = trpc.companies.list.useQuery();
+
+  // Apply filters to graph data
+  const graphData = rawGraphData ? {
+    nodes: rawGraphData.nodes.filter((node: any) => {
+      if (filters.company && node.company !== filters.company) return false;
+      return true;
+    }),
+    links: rawGraphData.links.filter((link: any) => {
+      // Filter links based on filtered nodes
+      const sourceNode = rawGraphData.nodes.find((n: any) => n.id === link.source);
+      const targetNode = rawGraphData.nodes.find((n: any) => n.id === link.target);
+      
+      if (filters.company) {
+        if (sourceNode?.company !== filters.company && targetNode?.company !== filters.company) {
+          return false;
+        }
+      }
+      
+      if (filters.relationshipType && link.type !== filters.relationshipType) {
+        return false;
+      }
+      
+      return true;
+    })
+  } : undefined;
 
   // Handle responsive sizing
   useEffect(() => {
@@ -60,6 +92,19 @@ export default function Graph() {
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen);
   };
+
+  const clearFilters = () => {
+    setFilters({
+      company: "",
+      relationshipType: "",
+      showFilters: filters.showFilters,
+    });
+  };
+
+  const activeFilterCount = [filters.company, filters.relationshipType].filter(Boolean).length;
+
+  // Get unique relationship types from graph data
+  const relationshipTypes = rawGraphData ? Array.from(new Set(rawGraphData.links.map((link: any) => link.type))) : [];
 
   const graphContent = (
     <div 
@@ -204,6 +249,13 @@ export default function Graph() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button 
+            onClick={() => setFilters(prev => ({ ...prev, showFilters: !prev.showFilters }))}
+            variant={filters.showFilters ? "default" : "outline"}
+          >
+            <Filter className="mr-2 h-4 w-4" />
+            Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
+          </Button>
           <Button onClick={() => setShowAddDialog(true)} variant="default">
             <Plus className="mr-2 h-4 w-4" />
             Add Relationship
@@ -222,6 +274,90 @@ export default function Graph() {
           )}
         </div>
       </div>
+
+      {filters.showFilters && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Filter Network</CardTitle>
+              {activeFilterCount > 0 && (
+                <Button onClick={clearFilters} variant="ghost" size="sm">
+                  <X className="mr-2 h-4 w-4" />
+                  Clear All
+                </Button>
+              )}
+            </div>
+            <CardDescription>
+              Focus on specific segments of your network
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">
+                  Company
+                </label>
+                <select
+                  value={filters.company}
+                  onChange={(e) => setFilters(prev => ({ ...prev, company: e.target.value }))}
+                  className="w-full px-3 py-2 border rounded-md"
+                >
+                  <option value="">All Companies</option>
+                  {companies?.map((company) => (
+                    <option key={company.id} value={company.name}>
+                      {company.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-2 block">
+                  Relationship Type
+                </label>
+                <select
+                  value={filters.relationshipType}
+                  onChange={(e) => setFilters(prev => ({ ...prev, relationshipType: e.target.value }))}
+                  className="w-full px-3 py-2 border rounded-md"
+                >
+                  <option value="">All Types</option>
+                  {relationshipTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {activeFilterCount > 0 && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="text-sm text-muted-foreground">Active filters:</span>
+                {filters.company && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm">
+                    Company: {filters.company}
+                    <button
+                      onClick={() => setFilters(prev => ({ ...prev, company: "" }))}
+                      className="hover:bg-blue-200 rounded-full p-0.5"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
+                {filters.relationshipType && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm">
+                    Type: {filters.relationshipType}
+                    <button
+                      onClick={() => setFilters(prev => ({ ...prev, relationshipType: "" }))}
+                      className="hover:bg-blue-200 rounded-full p-0.5"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {!isFullscreen && (
         <Card>

@@ -22,6 +22,13 @@
       "when": 1763912893430,
       "tag": "0002_far_fat_cobra",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1765050844424,
+      "tag": "0003_sleepy_joseph",
+      "breakpoints": true
     }
   ]
 }

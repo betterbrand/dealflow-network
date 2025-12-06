@@ -9,6 +9,8 @@ import Dashboard from "./pages/Dashboard";
 import Contacts from "./pages/Contacts";
 import ContactDetail from "./pages/ContactDetail";
 import Graph from "./pages/Graph";
+import Companies from "./pages/Companies";
+import CompanyDetail from "./pages/CompanyDetail";
 
 function Router() {
   return (
@@ -31,6 +33,16 @@ function Router() {
       <Route path="/graph" component={() => (
         <DashboardLayout>
           <Graph />
+        </DashboardLayout>
+      )} />
+      <Route path="/companies" component={() => (
+        <DashboardLayout>
+          <Companies />
+        </DashboardLayout>
+      )} />
+      <Route path="/companies/:id" component={() => (
+        <DashboardLayout>
+          <CompanyDetail />
         </DashboardLayout>
       )} />
       <Route path="/404" component={NotFound} />

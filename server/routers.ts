@@ -196,6 +196,83 @@ export const appRouter = router({
       const { getAllCompanies } = await import("./db");
       return await getAllCompanies();
     }),
+    
+    listWithStats: protectedProcedure.query(async () => {
+      const { getCompaniesWithStats } = await import("./db");
+      return await getCompaniesWithStats();
+    }),
+    
+    get: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const { getCompanyById } = await import("./db");
+        return await getCompanyById(input.id);
+      }),
+    
+    getWithContacts: protectedProcedure
+      .input(z.object({ id: z.number() }))  
+      .query(async ({ input }) => {
+        const { getCompanyWithContacts } = await import("./db");
+        return await getCompanyWithContacts(input.id);
+      }),
+    
+    create: protectedProcedure
+      .input(z.object({
+        name: z.string(),
+        type: z.string().optional(),
+        description: z.string().optional(),
+        industry: z.string().optional(),
+        location: z.string().optional(),
+        website: z.string().optional(),
+        logoUrl: z.string().optional(),
+        size: z.string().optional(),
+        foundedYear: z.number().optional(),
+        linkedinUrl: z.string().optional(),
+        twitterUrl: z.string().optional(),
+        employeeCount: z.number().optional(),
+        fundingStage: z.string().optional(),
+        totalFunding: z.string().optional(),
+        tags: z.string().optional(), // JSON string
+      }))
+      .mutation(async ({ input }) => {
+        const { createCompany } = await import("./db");
+        const companyId = await createCompany(input);
+        return { id: companyId };
+      }),
+    
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        type: z.string().optional(),
+        description: z.string().optional(),
+        industry: z.string().optional(),
+        location: z.string().optional(),
+        website: z.string().optional(),
+        logoUrl: z.string().optional(),
+        size: z.string().optional(),
+        foundedYear: z.number().optional(),
+        linkedinUrl: z.string().optional(),
+        twitterUrl: z.string().optional(),
+        employeeCount: z.number().optional(),
+        fundingStage: z.string().optional(),
+        totalFunding: z.string().optional(),
+        tags: z.string().optional(), // JSON string
+      }))
+      .mutation(async ({ input }) => {
+        const { updateCompany } = await import("./db");
+        const { id, ...data } = input;
+        await updateCompany(id, data);
+        return { success: true };
+      }),
+    
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const { deleteCompany } = await import("./db");
+        await deleteCompany(input.id);
+        return { success: true };
+      }),
   }),
   
   events: router({

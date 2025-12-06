@@ -178,6 +178,14 @@ export async function createCompany(data: InsertCompany) {
   return company.id;
 }
 
+export async function getCompanyById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const result = await db.select().from(companies).where(eq(companies.id, id)).limit(1);
+  return result[0] || null;
+}
+
 export async function getCompanyByName(name: string) {
   const db = await getDb();
   if (!db) return null;
@@ -191,6 +199,63 @@ export async function getAllCompanies() {
   if (!db) return [];
   
   return await db.select().from(companies).orderBy(companies.name);
+}
+
+export async function updateCompany(id: number, data: Partial<InsertCompany>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.update(companies).set(data).where(eq(companies.id, id));
+}
+
+export async function deleteCompany(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.delete(companies).where(eq(companies.id, id));
+}
+
+export async function getCompanyWithContacts(companyId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const company = await getCompanyById(companyId);
+  if (!company) return null;
+  
+  const companyContacts = await db
+    .select()
+    .from(contacts)
+    .where(eq(contacts.companyId, companyId))
+    .orderBy(desc(contacts.createdAt));
+  
+  return {
+    ...company,
+    contacts: companyContacts,
+    contactCount: companyContacts.length,
+  };
+}
+
+export async function getCompaniesWithStats() {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const allCompanies = await db.select().from(companies).orderBy(companies.name);
+  
+  const companiesWithStats = await Promise.all(
+    allCompanies.map(async (company) => {
+      const companyContacts = await db
+        .select()
+        .from(contacts)
+        .where(eq(contacts.companyId, company.id));
+      
+      return {
+        ...company,
+        contactCount: companyContacts.length,
+      };
+    })
+  );
+  
+  return companiesWithStats;
 }
 
 // ========== EVENTS ==========

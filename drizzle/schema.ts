@@ -72,6 +72,15 @@ export const companies = mysqlTable("companies", {
   industry: varchar("industry", { length: 255 }),
   location: varchar("location", { length: 255 }),
   website: varchar("website", { length: 500 }),
+  logoUrl: text("logoUrl"),
+  size: varchar("size", { length: 50 }),
+  foundedYear: int("foundedYear"),
+  linkedinUrl: varchar("linkedinUrl", { length: 500 }),
+  twitterUrl: varchar("twitterUrl", { length: 500 }),
+  employeeCount: int("employeeCount"),
+  fundingStage: varchar("fundingStage", { length: 100 }),
+  totalFunding: varchar("totalFunding", { length: 100 }),
+  tags: text("tags"), // JSON array
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
