@@ -1,400 +1,578 @@
-import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Network, RefreshCw, Plus, Maximize2, Minimize2, Filter, X } from "lucide-react";
-import { useRef, useCallback, useEffect, useState } from "react";
-import ForceGraph2D from "react-force-graph-2d";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
+import { trpc } from "@/lib/trpc";
+import { Filter, Maximize2, Minimize2, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { AddRelationshipDialog } from "@/components/AddRelationshipDialog";
+import CytoscapeComponent from "react-cytoscapejs";
+import cytoscape from "cytoscape";
+import cola from "cytoscape-cola";
+import popper from "cytoscape-popper";
+import contextMenus from "cytoscape-context-menus";
+import "cytoscape-context-menus/cytoscape-context-menus.css";
+
+// Register Cytoscape extensions
+cytoscape.use(cola);
+cytoscape.use(popper);
+cytoscape.use(contextMenus);
+
+interface GraphNode {
+  data: {
+    id: string;
+    label: string;
+    name: string;
+    company?: string;
+    role?: string;
+    connections: number;
+    color: string;
+    size: number;
+  };
+}
+
+interface GraphEdge {
+  data: {
+    id: string;
+    source: string;
+    target: string;
+    label: string;
+    relationshipType?: string;
+  };
+}
 
 export default function Graph() {
+  const { user, loading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
-  const graphRef = useRef<any>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [hoveredNode, setHoveredNode] = useState<any>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [dimensions, setDimensions] = useState({ width: 1000, height: 600 });
-  const [filters, setFilters] = useState({
-    company: "",
-    relationshipType: "",
-    showFilters: false,
-  });
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState<string>("all");
+  const [selectedRelationType, setSelectedRelationType] = useState<string>("all");
+  
+  const cyRef = useRef<cytoscape.Core | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement | null>(null);
 
-  const { data: rawGraphData, isLoading, refetch } = trpc.graph.getData.useQuery();
-  const { data: companies } = trpc.companies.list.useQuery();
-
-  // Apply filters to graph data
-  const graphData = rawGraphData ? {
-    nodes: rawGraphData.nodes.filter((node: any) => {
-      if (filters.company && node.company !== filters.company) return false;
-      return true;
-    }),
-    links: rawGraphData.links.filter((link: any) => {
-      // Filter links based on filtered nodes
-      const sourceNode = rawGraphData.nodes.find((n: any) => n.id === link.source);
-      const targetNode = rawGraphData.nodes.find((n: any) => n.id === link.target);
-      
-      if (filters.company) {
-        if (sourceNode?.company !== filters.company && targetNode?.company !== filters.company) {
-          return false;
-        }
-      }
-      
-      if (filters.relationshipType && link.type !== filters.relationshipType) {
-        return false;
-      }
-      
-      return true;
-    })
-  } : undefined;
-
-  // Handle responsive sizing
-  useEffect(() => {
-    const updateDimensions = () => {
-      if (containerRef.current) {
-        const container = containerRef.current;
-        const width = container.clientWidth;
-        // In fullscreen, use full viewport height minus some padding
-        // Otherwise use a reasonable height based on viewport
-        const height = isFullscreen 
-          ? window.innerHeight - 100 
-          : Math.min(Math.max(window.innerHeight * 0.6, 600), 800);
-        setDimensions({ width, height });
-      }
-    };
-
-    updateDimensions();
-    window.addEventListener('resize', updateDimensions);
-    return () => window.removeEventListener('resize', updateDimensions);
-  }, [isFullscreen]);
-
-  // Auto-fit graph when data loads or dimensions change
-  useEffect(() => {
-    if (graphData && graphRef.current) {
-      setTimeout(() => {
-        graphRef.current.zoomToFit(400, 20);
-      }, 100);
-    }
-  }, [graphData, dimensions]);
-
-  // Note: ForceGraph2D automatically re-renders when hoveredNode changes
-  // No manual refresh needed
-
-  const handleNodeClick = useCallback((node: any) => {
-    setLocation(`/contacts/${node.id}`);
-  }, [setLocation]);
-
-  const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen);
-  };
-
-  const clearFilters = () => {
-    setFilters({
-      company: "",
-      relationshipType: "",
-      showFilters: filters.showFilters,
-    });
-  };
-
-  const activeFilterCount = [filters.company, filters.relationshipType].filter(Boolean).length;
-
-  // Get unique relationship types from graph data
-  const relationshipTypes = rawGraphData ? Array.from(new Set(rawGraphData.links.map((link: any) => link.type))) : [];
-
-  const graphContent = (
-    <div 
-      ref={containerRef} 
-      className={`border rounded-lg overflow-hidden bg-background ${isFullscreen ? 'fixed inset-0 z-50 m-4' : ''}`}
-    >
-      {isFullscreen && (
-        <div className="absolute top-4 right-4 z-10 flex gap-2">
-          <Button onClick={() => refetch()} variant="outline" size="sm">
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-          <Button onClick={toggleFullscreen} variant="outline" size="sm">
-            <Minimize2 className="h-4 w-4" />
-          </Button>
-        </div>
-      )}
-      <ForceGraph2D
-        ref={graphRef}
-        graphData={graphData}
-        width={dimensions.width}
-        height={dimensions.height}
-        backgroundColor="#ffffff"
-        nodeLabel={(node: any) => `
-          <div style="background: white; padding: 8px; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
-            <strong>${node.label}</strong><br/>
-            ${node.company ? `<span style="color: #666;">${node.company}</span><br/>` : ''}
-            ${node.role ? `<span style="color: #999;">${node.role}</span>` : ''}
-          </div>
-        `}
-        nodeCanvasObject={(node: any, ctx, globalScale) => {
-          const label = node.label;
-          const fontSize = 14/globalScale;
-          const nodeRadius = 8;
-          
-          ctx.font = `${fontSize}px Sans-Serif`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          
-          // Draw node circle
-          ctx.beginPath();
-          ctx.arc(node.x, node.y, nodeRadius, 0, 2 * Math.PI, false);
-          ctx.fillStyle = node.company ? '#3b82f6' : '#a855f7';
-          ctx.fill();
-          
-          // Draw label below node
-          ctx.fillStyle = '#374151';
-          ctx.fillText(label, node.x, node.y + nodeRadius + fontSize + 4);
-        }}
-        linkCanvasObject={(link: any, ctx, globalScale) => {
-          const start = link.source;
-          const end = link.target;
-          
-          // Determine if this link should be highlighted
-          const isHighlighted = hoveredNode && (
-            (typeof start === 'object' ? start.id : start) === hoveredNode.id ||
-            (typeof end === 'object' ? end.id : end) === hoveredNode.id
-          );
-          
-          // Draw the link line
-          ctx.beginPath();
-          ctx.moveTo(start.x, start.y);
-          ctx.lineTo(end.x, end.y);
-          ctx.strokeStyle = isHighlighted ? '#3b82f6' : '#d1d5db';
-          ctx.lineWidth = isHighlighted ? 3 : 2;
-          ctx.stroke();
-          
-          // Only draw label if highlighted
-          if (isHighlighted && link.label) {
-            const midX = (start.x + end.x) / 2;
-            const midY = (start.y + end.y) / 2;
-            
-            // Calculate perpendicular offset for label
-            const dx = end.x - start.x;
-            const dy = end.y - start.y;
-            const length = Math.sqrt(dx * dx + dy * dy);
-            const offsetDistance = 15;
-            const offsetX = (-dy / length) * offsetDistance;
-            const offsetY = (dx / length) * offsetDistance;
-            
-            const labelX = midX + offsetX;
-            const labelY = midY + offsetY;
-            
-            // Draw label background
-            const fontSize = 12 / globalScale;
-            ctx.font = `bold ${fontSize}px Sans-Serif`;
-            const textWidth = ctx.measureText(link.label).width;
-            const padding = 6;
-            const bgWidth = textWidth + padding * 2;
-            const bgHeight = fontSize + padding * 2;
-            
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-            ctx.strokeStyle = '#e5e7eb';
-            ctx.lineWidth = 1;
-            
-            // Rounded rectangle for background
-            const radius = 4;
-            ctx.beginPath();
-            ctx.moveTo(labelX - bgWidth/2 + radius, labelY - bgHeight/2);
-            ctx.lineTo(labelX + bgWidth/2 - radius, labelY - bgHeight/2);
-            ctx.quadraticCurveTo(labelX + bgWidth/2, labelY - bgHeight/2, labelX + bgWidth/2, labelY - bgHeight/2 + radius);
-            ctx.lineTo(labelX + bgWidth/2, labelY + bgHeight/2 - radius);
-            ctx.quadraticCurveTo(labelX + bgWidth/2, labelY + bgHeight/2, labelX + bgWidth/2 - radius, labelY + bgHeight/2);
-            ctx.lineTo(labelX - bgWidth/2 + radius, labelY + bgHeight/2);
-            ctx.quadraticCurveTo(labelX - bgWidth/2, labelY + bgHeight/2, labelX - bgWidth/2, labelY + bgHeight/2 - radius);
-            ctx.lineTo(labelX - bgWidth/2, labelY - bgHeight/2 + radius);
-            ctx.quadraticCurveTo(labelX - bgWidth/2, labelY - bgHeight/2, labelX - bgWidth/2 + radius, labelY - bgHeight/2);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
-            
-            // Draw label text
-            ctx.fillStyle = '#374151';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(link.label, labelX, labelY);
-          }
-        }}
-        onNodeClick={handleNodeClick}
-        onNodeHover={(node) => setHoveredNode(node)}
-        cooldownTicks={100}
-        d3VelocityDecay={0.3}
-      />
-      {graphData && graphData.links.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md">
-            <p className="text-sm text-blue-900">
-              <strong>Tip:</strong> Contacts are shown as nodes. Add relationships between contacts to see connections!
-            </p>
-          </div>
-        </div>
-      )}
-    </div>
+  const { data: graphData, isLoading } = trpc.contacts.getGraph.useQuery(
+    undefined,
+    { enabled: !!user }
   );
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Knowledge Graph</h1>
-          <p className="text-muted-foreground mt-2">
-            Visualize your network connections
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button 
-            onClick={() => setFilters(prev => ({ ...prev, showFilters: !prev.showFilters }))}
-            variant={filters.showFilters ? "default" : "outline"}
-          >
-            <Filter className="mr-2 h-4 w-4" />
-            Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
-          </Button>
-          <Button onClick={() => setShowAddDialog(true)} variant="default">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Relationship
-          </Button>
-          {!isFullscreen && (
-            <>
-              <Button onClick={toggleFullscreen} variant="outline">
-                <Maximize2 className="mr-2 h-4 w-4" />
-                Fullscreen
-              </Button>
-              <Button onClick={() => refetch()} variant="outline">
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Refresh
-              </Button>
-            </>
-          )}
+  const { data: companiesList } = trpc.companies.list.useQuery(undefined, {
+    enabled: !!user,
+  });
+
+  // Generate company colors
+  const companyColors = useRef<Map<string, string>>(new Map());
+  const getCompanyColor = useCallback((company: string) => {
+    if (!companyColors.current.has(company)) {
+      const hue = (companyColors.current.size * 137.5) % 360;
+      companyColors.current.set(company, `hsl(${hue}, 70%, 60%)`);
+    }
+    return companyColors.current.get(company)!;
+  }, []);
+
+  // Transform data for Cytoscape
+  const cytoscapeElements = useCallback(() => {
+    if (!graphData) return [];
+
+    const nodes: GraphNode[] = graphData.nodes.map((node) => {
+      const company = node.company || "Unknown";
+      const connections = graphData.links.filter(
+        (link: any) => link.source === node.id || link.target === node.id
+      ).length;
+
+      return {
+        data: {
+          id: node.id.toString(),
+          label: node.name,
+          name: node.name,
+          company,
+          role: node.role,
+          connections,
+          color: getCompanyColor(company),
+          size: Math.max(30, Math.min(80, 30 + connections * 5)),
+        },
+      };
+    });
+
+    const edges: GraphEdge[] = graphData.links.map((link: any, idx: number) => ({
+      data: {
+        id: `edge-${idx}`,
+        source: link.source.toString(),
+        target: link.target.toString(),
+        label: link.relationshipType || "",
+        relationshipType: link.relationshipType,
+      },
+    }));
+
+    return [...nodes, ...edges];
+  }, [graphData, getCompanyColor]);
+
+  // Apply filters
+  const applyFilters = useCallback(() => {
+    if (!cyRef.current) return;
+
+    const cy = cyRef.current;
+    
+    // Show all elements first
+    cy.elements().style('display', 'element');
+
+    // Apply company filter
+    if (selectedCompany !== "all") {
+      cy.nodes().forEach((node) => {
+        if (node.data('company') !== selectedCompany) {
+          node.style('display', 'none');
+          // Hide connected edges
+          node.connectedEdges().style('display', 'none');
+        }
+      });
+    }
+
+    // Apply relationship type filter
+    if (selectedRelationType !== "all") {
+      cy.edges().forEach((edge) => {
+        if (edge.data('relationshipType') !== selectedRelationType) {
+          edge.style('display', 'none');
+        }
+      });
+    }
+  }, [selectedCompany, selectedRelationType]);
+
+  // Get unique relationship types
+  const relationshipTypes = useCallback(() => {
+    if (!graphData) return [];
+    const types = new Set<string>();
+    graphData.links.forEach((link: any) => {
+      if (link.relationshipType) types.add(link.relationshipType);
+    });
+    return Array.from(types);
+  }, [graphData]);
+
+  // Clear filters
+  const clearFilters = () => {
+    setSelectedCompany("all");
+    setSelectedRelationType("all");
+  };
+
+  const activeFilterCount =
+    (selectedCompany !== "all" ? 1 : 0) +
+    (selectedRelationType !== "all" ? 1 : 0);
+
+  // Cytoscape stylesheet
+  const stylesheet: any[] = [
+    {
+      selector: "node",
+      style: {
+        "background-color": "data(color)",
+        width: "data(size)",
+        height: "data(size)",
+        label: "data(label)",
+        "text-valign": "center",
+        "text-halign": "center",
+        "font-size": "12px",
+        "font-weight": "bold",
+        color: "#fff",
+        "text-outline-width": 2,
+        "text-outline-color": "data(color)",
+        "overlay-padding": "6px",
+        "z-index": 10,
+      },
+    },
+    {
+      selector: "node:selected",
+      style: {
+        "border-width": 3,
+        "border-color": "#000",
+        "overlay-opacity": 0,
+      },
+    },
+    {
+      selector: "edge",
+      style: {
+        width: 2,
+        "line-color": "#94a3b8",
+        "target-arrow-color": "#94a3b8",
+        "target-arrow-shape": "triangle",
+        "curve-style": "bezier",
+        label: "data(label)",
+        "font-size": "10px",
+        color: "#64748b",
+        "text-rotation": "autorotate",
+        "text-margin-y": -10,
+      },
+    },
+    {
+      selector: "edge:selected",
+      style: {
+        width: 3,
+        "line-color": "#3b82f6",
+        "target-arrow-color": "#3b82f6",
+      },
+    },
+  ];
+
+  // Layout configuration
+  const layout = {
+    name: "cola",
+    animate: true,
+    refresh: 1,
+    maxSimulationTime: 4000,
+    ungrabifyWhileSimulating: false,
+    fit: true,
+    padding: 30,
+    nodeDimensionsIncludeLabels: true,
+    randomize: false,
+    avoidOverlap: true,
+    handleDisconnected: true,
+    convergenceThreshold: 0.01,
+    nodeSpacing: 50,
+    flow: undefined,
+    alignment: undefined,
+    gapInequalities: undefined,
+  };
+
+  // Initialize Cytoscape instance
+  const handleCyInit = useCallback(
+    (cy: cytoscape.Core) => {
+      cyRef.current = cy;
+
+      // Context menus
+      (cy as any).contextMenus({
+        menuItems: [
+          {
+            id: "view-profile",
+            content: "View Profile",
+            selector: "node",
+            onClickFunction: (event: any) => {
+              const nodeId = event.target.id();
+              setLocation(`/contacts/${nodeId}`);
+            },
+          },
+          {
+            id: "add-relationship",
+            content: "Add Relationship",
+            selector: "node",
+            onClickFunction: (event: any) => {
+              // TODO: Open relationship dialog
+              console.log("Add relationship for", event.target.data("name"));
+            },
+          },
+          {
+            id: "separator1",
+            content: "---",
+            selector: "node",
+            disabled: true,
+            onClickFunction: () => {}, // Required even for disabled items
+          },
+          {
+            id: "hide-node",
+            content: "Hide Contact",
+            selector: "node",
+            onClickFunction: (event: any) => {
+              event.target.style("display", "none");
+            },
+          },
+        ],
+      });
+
+      // Tooltips on hover
+      cy.on("mouseover", "node", (event) => {
+        const node = event.target;
+        const data = node.data();
+
+        // Remove existing tooltip
+        if (tooltipRef.current) {
+          tooltipRef.current.remove();
+          tooltipRef.current = null;
+        }
+
+        // Create tooltip
+        const tooltip = document.createElement("div");
+        tooltip.className =
+          "absolute z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 text-sm";
+        tooltip.innerHTML = `
+          <div class="font-semibold text-gray-900 dark:text-white">${data.name}</div>
+          ${data.company ? `<div class="text-gray-600 dark:text-gray-400">${data.company}</div>` : ""}
+          ${data.role ? `<div class="text-gray-500 dark:text-gray-500 text-xs">${data.role}</div>` : ""}
+          <div class="text-gray-500 dark:text-gray-500 text-xs mt-1">${data.connections} connections</div>
+        `;
+
+        tooltipRef.current = tooltip;
+
+        // Position tooltip using Popper
+        const popperInstance = (node as any).popper({
+          content: () => tooltip,
+          popper: {
+            placement: "top",
+            modifiers: [
+              {
+                name: "offset",
+                options: {
+                  offset: [0, 10],
+                },
+              },
+            ],
+          },
+        });
+
+        // Update position on viewport changes
+        const updateTooltip = () => {
+          popperInstance.update();
+        };
+        cy.on("pan zoom resize", updateTooltip);
+
+        // Cleanup
+        node.once("mouseout", () => {
+          cy.off("pan zoom resize", updateTooltip);
+          if (tooltipRef.current) {
+            tooltipRef.current.remove();
+            tooltipRef.current = null;
+          }
+        });
+      });
+
+      // Apply filters after layout
+      cy.ready(() => {
+        applyFilters();
+      });
+    },
+    [setLocation, applyFilters]
+  );
+
+  // Reapply filters when they change
+  useEffect(() => {
+    applyFilters();
+  }, [selectedCompany, selectedRelationType, applyFilters]);
+
+  // Toggle fullscreen
+  const toggleFullscreen = () => {
+    if (!containerRef.current) return;
+
+    if (!isFullscreen) {
+      containerRef.current.requestFullscreen?.();
+    } else {
+      document.exitFullscreen?.();
+    }
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
+
+  if (authLoading || isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading your network...</p>
         </div>
       </div>
+    );
+  }
 
-      {filters.showFilters && (
-        <Card>
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Card className="w-96">
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Filter Network</CardTitle>
+            <CardTitle>Sign in Required</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-4">
+              Please sign in to view your knowledge graph.
+            </p>
+            <Button asChild className="w-full">
+              <a href={getLoginUrl()}>Sign In</a>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const elements = cytoscapeElements();
+
+  return (
+    <div className="min-h-screen bg-background" ref={containerRef}>
+      <div className="container py-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold">Knowledge Graph</h1>
+            <p className="text-muted-foreground">
+              Visualize your network connections
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowFilters(!showFilters)}
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Filters
               {activeFilterCount > 0 && (
-                <Button onClick={clearFilters} variant="ghost" size="sm">
-                  <X className="mr-2 h-4 w-4" />
-                  Clear All
-                </Button>
+                <Badge variant="secondary" className="ml-2">
+                  {activeFilterCount}
+                </Badge>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleFullscreen}
+            >
+              {isFullscreen ? (
+                <Minimize2 className="h-4 w-4" />
+              ) : (
+                <Maximize2 className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {/* Filters */}
+        {showFilters && (
+          <Card className="mb-6">
+            <CardContent className="pt-6">
+              <div className="flex flex-wrap gap-4 items-end">
+                <div className="flex-1 min-w-[200px]">
+                  <label className="text-sm font-medium mb-2 block">
+                    Company
+                  </label>
+                  <Select
+                    value={selectedCompany}
+                    onValueChange={setSelectedCompany}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="All companies" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All companies</SelectItem>
+                      {companiesList?.map((company) => (
+                        <SelectItem key={company.id} value={company.name}>
+                          {company.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex-1 min-w-[200px]">
+                  <label className="text-sm font-medium mb-2 block">
+                    Relationship Type
+                  </label>
+                  <Select
+                    value={selectedRelationType}
+                    onValueChange={setSelectedRelationType}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="All types" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All types</SelectItem>
+                      {relationshipTypes().map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {activeFilterCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearFilters}
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Clear Filters
+                  </Button>
+                )}
+              </div>
+
+              {/* Active filters */}
+              {activeFilterCount > 0 && (
+                <div className="flex flex-wrap gap-2 mt-4">
+                  {selectedCompany !== "all" && (
+                    <Badge variant="secondary">
+                      Company: {selectedCompany}
+                      <button
+                        className="ml-2"
+                        onClick={() => setSelectedCompany("all")}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  )}
+                  {selectedRelationType !== "all" && (
+                    <Badge variant="secondary">
+                      Type: {selectedRelationType}
+                      <button
+                        className="ml-2"
+                        onClick={() => setSelectedRelationType("all")}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Graph */}
+        <Card>
+          <CardContent className="p-0">
+            <div
+              style={{
+                height: isFullscreen ? "100vh" : "calc(100vh - 300px)",
+                minHeight: "600px",
+              }}
+            >
+              {elements.length > 0 ? (
+                <CytoscapeComponent
+                  elements={elements}
+                  stylesheet={stylesheet}
+                  layout={layout}
+                  cy={handleCyInit}
+                  style={{ width: "100%", height: "100%" }}
+                  wheelSensitivity={0.2}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <p className="text-muted-foreground mb-4">
+                      No connections in your network yet
+                    </p>
+                    <Button onClick={() => setLocation("/contacts")}>
+                      Add Contacts
+                    </Button>
+                  </div>
+                </div>
               )}
             </div>
-            <CardDescription>
-              Focus on specific segments of your network
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium mb-2 block">
-                  Company
-                </label>
-                <select
-                  value={filters.company}
-                  onChange={(e) => setFilters(prev => ({ ...prev, company: e.target.value }))}
-                  className="w-full px-3 py-2 border rounded-md"
-                >
-                  <option value="">All Companies</option>
-                  {companies?.map((company) => (
-                    <option key={company.id} value={company.name}>
-                      {company.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">
-                  Relationship Type
-                </label>
-                <select
-                  value={filters.relationshipType}
-                  onChange={(e) => setFilters(prev => ({ ...prev, relationshipType: e.target.value }))}
-                  className="w-full px-3 py-2 border rounded-md"
-                >
-                  <option value="">All Types</option>
-                  {relationshipTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            {activeFilterCount > 0 && (
-              <div className="mt-4 flex flex-wrap gap-2">
-                <span className="text-sm text-muted-foreground">Active filters:</span>
-                {filters.company && (
-                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm">
-                    Company: {filters.company}
-                    <button
-                      onClick={() => setFilters(prev => ({ ...prev, company: "" }))}
-                      className="hover:bg-blue-200 rounded-full p-0.5"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                )}
-                {filters.relationshipType && (
-                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm">
-                    Type: {filters.relationshipType}
-                    <button
-                      onClick={() => setFilters(prev => ({ ...prev, relationshipType: "" }))}
-                      className="hover:bg-blue-200 rounded-full p-0.5"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                )}
-              </div>
-            )}
           </CardContent>
         </Card>
-      )}
-
-      {!isFullscreen && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Network Visualization</CardTitle>
-            <CardDescription>
-              {graphData ? `${graphData.nodes.length} contacts, ${graphData.links.length} connections` : "Loading..."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="flex items-center justify-center h-[600px] text-muted-foreground">
-                <div className="text-center">
-                  <Network className="h-12 w-12 mx-auto mb-4 animate-pulse" />
-                  <p>Loading network graph...</p>
-                </div>
-              </div>
-            ) : graphData && graphData.nodes.length === 0 ? (
-              <div className="flex items-center justify-center h-[600px] text-muted-foreground">
-                <div className="text-center">
-                  <Network className="h-12 w-12 mx-auto mb-4" />
-                  <p>No contacts yet. Start networking to build your graph!</p>
-                </div>
-              </div>
-            ) : (
-              graphContent
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {isFullscreen && graphContent}
-
-      <AddRelationshipDialog
-        open={showAddDialog}
-        onOpenChange={setShowAddDialog}
-        onSuccess={() => {
-          refetch();
-          setShowAddDialog(false);
-        }}
-      />
+      </div>
     </div>
   );
 }

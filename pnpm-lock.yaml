@@ -22,6 +22,9 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.693.0
         version: 3.907.0
+      '@popperjs/core':
+        specifier: ^2.11.8
+        version: 2.11.8
       '@radix-ui/react-accordion':
         specifier: ^1.2.12
         version: 1.2.12(@types/react-dom@19.2.1(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -127,6 +130,18 @@ importers:
       cookie:
         specifier: ^1.0.2
         version: 1.0.2
+      cytoscape:
+        specifier: ^3.33.1
+        version: 3.33.1
+      cytoscape-cola:
+        specifier: ^2.5.1
+        version: 2.5.1(cytoscape@3.33.1)
+      cytoscape-context-menus:
+        specifier: ^4.2.1
+        version: 4.2.1(cytoscape@3.33.1)
+      cytoscape-popper:
+        specifier: ^4.0.1
+        version: 4.0.1(cytoscape@3.33.1)
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
@@ -166,6 +181,9 @@ importers:
       react:
         specifier: ^19.1.1
         version: 19.2.0
+      react-cytoscapejs:
+        specifier: ^2.0.0
+        version: 2.0.0(cytoscape@3.33.1)(react@19.2.0)
       react-day-picker:
         specifier: ^9.11.1
         version: 9.11.1(react@19.2.0)
@@ -174,7 +192,7 @@ importers:
         version: 19.2.0(react@19.2.0)
       react-force-graph:
         specifier: ^1.48.1
-        version: 1.48.1(aframe@1.7.1)(react@19.2.0)(three@0.181.0)
+        version: 1.48.1(aframe@1.7.1)(react@19.2.0)(three@0.164.1)
       react-force-graph-2d:
         specifier: ^1.29.0
         version: 1.29.0(react@19.2.0)
@@ -205,6 +223,9 @@ importers:
       vaul:
         specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.2.1(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      webcola:
+        specifier: ^3.4.0
+        version: 3.4.0
       wouter:
         specifier: ^3.3.5
         version: 3.7.1(patch_hash=4e16e6ff3fde7d6c1024d3e0c8605dc9eb6afb690d0d49958c2f449091813072)(react@19.2.0)
@@ -1063,6 +1084,9 @@ packages:
 
   '@mermaid-js/parser@0.6.3':
     resolution: {integrity: sha512-lnjOhe7zyHjc+If7yT4zoedx2vo4sHaTmtkl1+or8BRTnCtDmcTpAjpzDSfCZrshM5bCoz0GyidzadJAH1xobA==}
+
+  '@popperjs/core@2.11.8':
+    resolution: {integrity: sha512-P1st0aksCrn9sGZhp8GMYwBnQsbvAWsZAX44oXNNvLHGqAOcoVxmjZiohstwQ7SqKnbR47akdNi+uleWD8+g6A==}
 
   '@radix-ui/number@1.1.1':
     resolution: {integrity: sha512-MkKCwxlXTgz6CFoJx3pCwn07GKp36+aZyu/u2Ln2VrA5DcdyCZkASEDBTd8x5whTQQL5CiYf4prXKLcgQdv29g==}
@@ -2631,6 +2655,16 @@ packages:
   csstype@3.1.3:
     resolution: {integrity: sha512-M1uQkMl8rQK/szD0LNhtqxIPLpimGm8sOBwU7lLnCpSbTyY3yeU1Vc7l4KT5zT4s/yOxHH5O7tIuuLOCnLADRw==}
 
+  cytoscape-cola@2.5.1:
+    resolution: {integrity: sha512-4/2S9bW1LvdsEPmxXN1OEAPFPbk7DvCx2c9d+TblkQAAvptGaSgtPWCByTEGgT8UxCxcVqes2aFPO5pzwo7R2w==}
+    peerDependencies:
+      cytoscape: ^3.2.0
+
+  cytoscape-context-menus@4.2.1:
+    resolution: {integrity: sha512-h0dXq/DGIQUegC+mncawzFT+zV52I5dxME3fDLqO6cd5pYfx9U+u2YZjn29z8YfRjvayBtsxpD6JUvgiH1ZdaQ==}
+    peerDependencies:
+      cytoscape: ^2.7.0 || ^3.0.0
+
   cytoscape-cose-bilkent@4.1.0:
     resolution: {integrity: sha512-wgQlVIUJF13Quxiv5e1gstZ08rnZj2XaLHGoFMYXz7SkNfCDOOteKBE6SYRfA9WxxI/iBc3ajfDoc6hb/MRAHQ==}
     peerDependencies:
@@ -2638,6 +2672,11 @@ packages:
 
   cytoscape-fcose@2.2.0:
     resolution: {integrity: sha512-ki1/VuRIHFCzxWNrsshHYPs6L7TvLu3DL+TyIGEsRcvVERmxokbf5Gdk7mFxZnTdiGtnA4cfSmjZJMviqSuZrQ==}
+    peerDependencies:
+      cytoscape: ^3.2.0
+
+  cytoscape-popper@4.0.1:
+    resolution: {integrity: sha512-u2gYDMMvGSlAJbNfKvMljOM/p+BrHu0A4VcpELa+xJf54HoMn+nV0iuhALZx+O89b74SKJRy7jYo2WfkD5uvsw==}
     peerDependencies:
       cytoscape: ^3.2.0
 
@@ -2679,9 +2718,15 @@ packages:
     resolution: {integrity: sha512-mdjtIZ1XLAM8bm/hx3WwjfHt6Sggek7qH043O8KEjDXN40xi3vx/6pYSVTwLjEgiXQTbvaouWKynLBiUZ6SK6A==}
     engines: {node: '>=12'}
 
+  d3-dispatch@1.0.6:
+    resolution: {integrity: sha512-fVjoElzjhCEy+Hbn8KygnmMS7Or0a9sI2UzGwoB7cCtvI1XpVN9GpoYlnb3xt2YV66oXYb1fLJ8GMvP4hdU1RA==}
+
   d3-dispatch@3.0.1:
     resolution: {integrity: sha512-rzUyPU/S7rwUflMyLc1ETDeBj0NRuHKKAcvukozwhshr6g6c5d8zh4c2gQjY2bZ0dXeGLWc1PF174P2tVvKhfg==}
     engines: {node: '>=12'}
+
+  d3-drag@1.2.5:
+    resolution: {integrity: sha512-rD1ohlkKQwMZYkQlYVCrSFxsWPzI97+W+PaEIBNTMxRuxz9RF0Hi5nJWHGVJ3Om9d2fRTe1yOBINJyy/ahV95w==}
 
   d3-drag@3.0.0:
     resolution: {integrity: sha512-pWbUJLdETVA8lQNJecMxoXfH6x+mO2UQo8rSmZ+QqxcbyA3hfeprFgIT//HW2nlHChWeIIMwS2Fq+gEARkhTkg==}
@@ -2757,6 +2802,9 @@ packages:
     resolution: {integrity: sha512-GZW464g1SH7ag3Y7hXjf8RoUuAFIqklOAq3MRl4OaWabTFJY9PN/E1YklhXLh+OQ3fM9yS2nOkCoS+WLZ6kvxQ==}
     engines: {node: '>=12'}
 
+  d3-selection@1.4.2:
+    resolution: {integrity: sha512-SJ0BqYihzOjDnnlfyeHT0e30k0K1+5sR3d5fNueCNeuhZTnGw4M4o8mqJchSwgKMXCNFo+e2VTChiSJ0vYtXkg==}
+
   d3-selection@3.0.0:
     resolution: {integrity: sha512-fmTRWbNMmsmWq6xJV8D19U/gw/bwrHfNXxrIN+HfZgnzqTHp9jOmKMhsTUjXOJnZOdZY9Q28y4yebKzqDKlxlQ==}
     engines: {node: '>=12'}
@@ -2775,6 +2823,9 @@ packages:
   d3-time@3.1.0:
     resolution: {integrity: sha512-VqKjzBLejbSMT4IgbmVgDjpkYrNWUYJnbCGo874u7MMKIWsILRX+OpX/gTk8MqjpT1A/c6HY2dCA77ZN0lkQ2Q==}
     engines: {node: '>=12'}
+
+  d3-timer@1.0.10:
+    resolution: {integrity: sha512-B1JDm0XDaQC+uvo4DT79H0XmBskgS3l6Ve+1SBCfxgmtIb1AVrPIoqd+nPSv+loMX8szQ0sVUhGngL7D5QPiXw==}
 
   d3-timer@3.0.1:
     resolution: {integrity: sha512-ndfJ/JxxMd3nw31uyKoY2naivF+r29V+Lc0svZxe1JvvIRmi8hUsrMvdOwgS1o6uBHmiz91geQ0ylPP0aj1VUA==}
@@ -4009,6 +4060,12 @@ packages:
     resolution: {integrity: sha512-8zGqypfENjCIqGhgXToC8aB2r7YrBX+AQAfIPs/Mlk+BtPTztOvTS01NRW/3Eh60J+a48lt8qsCzirQ6loCVfA==}
     engines: {node: '>= 0.8'}
 
+  react-cytoscapejs@2.0.0:
+    resolution: {integrity: sha512-t3SSl1DQy7+JQjN+8QHi1anEJlM3i3aAeydHTsJwmjo/isyKK7Rs7oCvU6kZsB9NwZidzZQR21Vm2PcBLG/Tjg==}
+    peerDependencies:
+      cytoscape: ^3.2.19
+      react: '>=15.0.0'
+
   react-day-picker@9.11.1:
     resolution: {integrity: sha512-l3ub6o8NlchqIjPKrRFUCkTUEq6KwemQlfv3XZzzwpUeGwmDJ+0u0Upmt38hJyd7D/vn2dQoOoLV/qAp0o3uUw==}
     engines: {node: '>=18'}
@@ -4639,6 +4696,9 @@ packages:
   web-namespaces@2.0.1:
     resolution: {integrity: sha512-bKr1DkiNa2krS7qxNtdrtHAmzuYGFQLiQ13TsorsdT6ULTkPLKuu5+GsFpDlg6JFjUTwX2DyhMPG2be8uPrqsQ==}
 
+  webcola@3.4.0:
+    resolution: {integrity: sha512-4BiLXjXw3SJHo3Xd+rF+7fyClT6n7I+AR6TkBqyQ4kTsePSAMDLRCXY1f3B/kXJeP9tYn4G1TblxTO+jAt0gaw==}
+
   why-is-node-running@2.3.0:
     resolution: {integrity: sha512-hUrmaWBdVDcxvYqnyh09zunKzROWjbZTiNy8dBEjkS7ehEDQibXJ7XvlmtbwuTclUiIyN+CyXQD4Vmko8fNm8w==}
     engines: {node: '>=8'}
@@ -4688,20 +4748,20 @@ packages:
 
 snapshots:
 
-  3d-force-graph-ar@1.10.0(aframe@1.7.1)(three@0.181.0):
+  3d-force-graph-ar@1.10.0(aframe@1.7.1)(three@0.164.1):
     dependencies:
-      aframe-forcegraph-component: 3.3.0(aframe@1.7.1)(three@0.181.0)
+      aframe-forcegraph-component: 3.3.0(aframe@1.7.1)(three@0.164.1)
       kapsule: 1.16.3
     transitivePeerDependencies:
       - aframe
       - three
 
-  3d-force-graph-vr@3.1.1(aframe@1.7.1)(three@0.181.0):
+  3d-force-graph-vr@3.1.1(aframe@1.7.1)(three@0.164.1):
     dependencies:
       accessor-fn: 1.5.3
       aframe: 1.7.1
       aframe-extras: 7.6.0
-      aframe-forcegraph-component: 3.3.0(aframe@1.7.1)(three@0.181.0)
+      aframe-forcegraph-component: 3.3.0(aframe@1.7.1)(three@0.164.1)
       kapsule: 1.16.3
       polished: 4.3.1
     transitivePeerDependencies:
@@ -5639,6 +5699,8 @@ snapshots:
   '@mermaid-js/parser@0.6.3':
     dependencies:
       langium: 3.3.1
+
+  '@popperjs/core@2.11.8': {}
 
   '@radix-ui/number@1.1.1': {}
 
@@ -7146,10 +7208,10 @@ snapshots:
       three: 0.164.1
       three-pathfinding: 1.3.0(three@0.164.1)
 
-  aframe-forcegraph-component@3.3.0(aframe@1.7.1)(three@0.181.0):
+  aframe-forcegraph-component@3.3.0(aframe@1.7.1)(three@0.164.1):
     dependencies:
       aframe: 1.7.1
-      three-forcegraph: 1.43.0(three@0.181.0)
+      three-forcegraph: 1.43.0(three@0.164.1)
     transitivePeerDependencies:
       - three
 
@@ -7383,6 +7445,15 @@ snapshots:
 
   csstype@3.1.3: {}
 
+  cytoscape-cola@2.5.1(cytoscape@3.33.1):
+    dependencies:
+      cytoscape: 3.33.1
+      webcola: 3.4.0
+
+  cytoscape-context-menus@4.2.1(cytoscape@3.33.1):
+    dependencies:
+      cytoscape: 3.33.1
+
   cytoscape-cose-bilkent@4.1.0(cytoscape@3.33.1):
     dependencies:
       cose-base: 1.0.3
@@ -7391,6 +7462,10 @@ snapshots:
   cytoscape-fcose@2.2.0(cytoscape@3.33.1):
     dependencies:
       cose-base: 2.2.0
+      cytoscape: 3.33.1
+
+  cytoscape-popper@4.0.1(cytoscape@3.33.1):
+    dependencies:
       cytoscape: 3.33.1
 
   cytoscape@3.33.1: {}
@@ -7429,7 +7504,14 @@ snapshots:
     dependencies:
       delaunator: 5.0.1
 
+  d3-dispatch@1.0.6: {}
+
   d3-dispatch@3.0.1: {}
+
+  d3-drag@1.2.5:
+    dependencies:
+      d3-dispatch: 1.0.6
+      d3-selection: 1.4.2
 
   d3-drag@3.0.0:
     dependencies:
@@ -7504,6 +7586,8 @@ snapshots:
       d3-time: 3.1.0
       d3-time-format: 4.1.0
 
+  d3-selection@1.4.2: {}
+
   d3-selection@3.0.0: {}
 
   d3-shape@1.3.7:
@@ -7521,6 +7605,8 @@ snapshots:
   d3-time@3.1.0:
     dependencies:
       d3-array: 3.2.4
+
+  d3-timer@1.0.10: {}
 
   d3-timer@3.0.1: {}
 
@@ -9035,6 +9121,12 @@ snapshots:
       iconv-lite: 0.4.24
       unpipe: 1.0.0
 
+  react-cytoscapejs@2.0.0(cytoscape@3.33.1)(react@19.2.0):
+    dependencies:
+      cytoscape: 3.33.1
+      prop-types: 15.8.1
+      react: 19.2.0
+
   react-day-picker@9.11.1(react@19.2.0):
     dependencies:
       '@date-fns/tz': 1.4.1
@@ -9054,11 +9146,11 @@ snapshots:
       react: 19.2.0
       react-kapsule: 2.5.7(react@19.2.0)
 
-  react-force-graph@1.48.1(aframe@1.7.1)(react@19.2.0)(three@0.181.0):
+  react-force-graph@1.48.1(aframe@1.7.1)(react@19.2.0)(three@0.164.1):
     dependencies:
       3d-force-graph: 1.79.0
-      3d-force-graph-ar: 1.10.0(aframe@1.7.1)(three@0.181.0)
-      3d-force-graph-vr: 3.1.1(aframe@1.7.1)(three@0.181.0)
+      3d-force-graph-ar: 1.10.0(aframe@1.7.1)(three@0.164.1)
+      3d-force-graph-vr: 3.1.1(aframe@1.7.1)(three@0.164.1)
       force-graph: 1.51.0
       prop-types: 15.8.1
       react: 19.2.0
@@ -9462,6 +9554,20 @@ snapshots:
       nice-color-palettes: 3.0.0
       quad-indices: 2.0.1
 
+  three-forcegraph@1.43.0(three@0.164.1):
+    dependencies:
+      accessor-fn: 1.5.3
+      d3-array: 3.2.4
+      d3-force-3d: 3.0.6
+      d3-scale: 4.0.2
+      d3-scale-chromatic: 3.1.0
+      data-bind-mapper: 1.0.3
+      kapsule: 1.16.3
+      ngraph.forcelayout: 3.3.1
+      ngraph.graph: 20.1.0
+      three: 0.164.1
+      tinycolor2: 1.6.0
+
   three-forcegraph@1.43.0(three@0.181.0):
     dependencies:
       accessor-fn: 1.5.3
@@ -9775,6 +9881,13 @@ snapshots:
   vscode-uri@3.0.8: {}
 
   web-namespaces@2.0.1: {}
+
+  webcola@3.4.0:
+    dependencies:
+      d3-dispatch: 1.0.6
+      d3-drag: 1.2.5
+      d3-shape: 1.3.7
+      d3-timer: 1.0.10
 
   why-is-node-running@2.3.0:
     dependencies:

@@ -197,6 +197,35 @@ export const appRouter = router({
         await deleteContact(input.id);
         return { success: true };
       }),
+    
+    getGraph: protectedProcedure.query(async ({ ctx }) => {
+      const { getAllContacts } = await import("./db");
+      const { contactRelationships } = await import("../drizzle/schema");
+      const { getDb } = await import("./db");
+      
+      // Get all contacts for the user
+      const contacts = await getAllContacts(ctx.user.id);
+      
+      // Get all relationships
+      const db = await getDb();
+      const relationships = db ? await db.select().from(contactRelationships) : [];
+      
+      // Transform to graph format
+      const nodes = contacts.map(c => ({
+        id: c.contact.id,
+        name: c.contact.name,
+        company: c.contact.company || undefined,
+        role: c.contact.role || undefined,
+      }));
+      
+      const links = relationships.map((rel: any) => ({
+        source: rel.fromContactId,
+        target: rel.toContactId,
+        relationshipType: rel.relationshipType || undefined,
+      }));
+      
+      return { nodes, links };
+    }),
   }),
   
   companies: router({

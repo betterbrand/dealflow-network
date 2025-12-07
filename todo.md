@@ -278,3 +278,15 @@
 
 ## Graph Zoom Adjustment
 - [x] Change initial zoom padding from 50 to 20 for wider view
+
+
+## Cytoscape.js Migration
+- [x] Install cytoscape, cytoscape-popper, cytoscape-context-menus, cytoscape-cola
+- [x] Create new CytoscapeGraph component
+- [x] Implement node styling (color by company, size by connections)
+- [x] Add hover tooltips with contact details
+- [x] Add right-click context menus
+- [x] Implement cola layout with collision avoidance
+- [x] Integrate filtering with Cytoscape
+- [x] Replace old Graph component
+- [x] Test all interactions
