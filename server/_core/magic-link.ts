@@ -7,8 +7,10 @@ import { ENV } from "./env";
  */
 export const AUTHORIZED_USERS = [
   "scott@betterbrand.com",
+  "brian@discoveryblock.com",
+  "djohnstonec@gmail.com",
+  "christopher@alta3x.com",
   "test@example.com", // For testing
-  // Add more authorized emails here
 ];
 
 /**
