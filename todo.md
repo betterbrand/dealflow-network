@@ -383,3 +383,11 @@
 - [x] Add platform detection for Mac/Windows key display
 - [x] Add visual indicators (ring) for selected items
 - [x] Test all keyboard shortcuts
+
+## Follow-up Questions Feature
+- [x] Create LLM-powered follow-up question generation
+- [x] Generate contextual suggestions based on query and results
+- [x] Add follow-up questions UI section after results
+- [x] Make suggestions clickable to execute new queries
+- [x] Show 3-5 relevant follow-up questions
+- [x] Test follow-up question generation and interaction

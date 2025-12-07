@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Send, Sparkles, User, Building2, MapPin, Briefcase, History, X, Clock } from "lucide-react";
+import { Loader2, Send, Sparkles, User, Building2, MapPin, Briefcase, History, X, Clock, Lightbulb } from "lucide-react";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
@@ -443,6 +443,39 @@ export default function AIQuery() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Follow-up Questions */}
+            {results.followUpQuestions && results.followUpQuestions.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Lightbulb className="h-5 w-5 text-amber-500" />
+                    Explore Further
+                  </CardTitle>
+                  <CardDescription>
+                    Try these follow-up questions to dive deeper
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    {results.followUpQuestions.map((question: string, idx: number) => (
+                      <Button
+                        key={idx}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setQuery(question);
+                          inputRef.current?.focus();
+                        }}
+                        className="text-left justify-start h-auto py-2 px-3"
+                      >
+                        {question}
+                      </Button>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
       </div>

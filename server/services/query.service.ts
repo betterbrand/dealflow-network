@@ -195,3 +195,85 @@ Only include filters that are explicitly mentioned in the query.`;
     throw error;
   }
 }
+
+/**
+ * Generate follow-up question suggestions based on query and results
+ */
+export async function generateFollowUpQuestions(
+  originalQuery: string,
+  parsed: ParsedQuery,
+  resultCount: number
+): Promise<string[]> {
+  try {
+    const systemPrompt = `You are a helpful assistant that suggests follow-up questions for network queries.
+
+Given an original query, its parsed intent/filters, and the number of results found, suggest 3-5 relevant follow-up questions that would help the user explore their network more deeply.
+
+Guidelines:
+- Make questions specific and actionable
+- Build on the original query context
+- Suggest different angles: narrowing down, expanding scope, finding connections, analyzing patterns
+- Use natural language that matches the user's query style
+- If results are empty, suggest broader queries
+- If results are many, suggest ways to narrow down or analyze
+
+Return JSON with this structure:
+{
+  "questions": ["question 1", "question 2", "question 3", "question 4", "question 5"]
+}`;
+
+    const userPrompt = `Original query: "${originalQuery}"
+Intent: ${parsed.intent}
+Filters: ${JSON.stringify(parsed.filters)}
+Results found: ${resultCount}
+
+Suggest follow-up questions:`;
+
+    const response = await invokeLLM({
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "followup_questions",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              questions: {
+                type: "array",
+                items: { type: "string" },
+                minItems: 3,
+                maxItems: 5,
+              },
+            },
+            required: ["questions"],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    if (!response?.choices?.[0]?.message?.content) {
+      throw new Error("Invalid response from LLM");
+    }
+
+    const content = response.choices[0].message.content;
+    if (typeof content !== 'string') {
+      throw new Error("LLM response content is not a string");
+    }
+
+    const result = JSON.parse(content);
+    return result.questions || [];
+  } catch (error) {
+    console.error('[generateFollowUpQuestions] Error:', error);
+    // Return fallback questions if LLM fails
+    return [
+      "Show me their connections",
+      "Find people in similar roles",
+      "Who else works at these companies?",
+    ];
+  }
+}

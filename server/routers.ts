@@ -44,7 +44,7 @@ export const appRouter = router({
         console.log('[aiQuery] Received query:', input.query);
         
         try {
-          const { parseQuery } = await import("./services/query.service");
+          const { parseQuery, generateFollowUpQuestions } = await import("./services/query.service");
           const { getDb } = await import("./db");
           const { contacts } = await import("../drizzle/schema");
           const { and, or, like } = await import("drizzle-orm");
@@ -114,11 +114,19 @@ export const appRouter = router({
             resultCount: results.length,
           });
 
+          // Generate follow-up questions
+          const followUpQuestions = await generateFollowUpQuestions(
+            input.query,
+            parsed,
+            results.length
+          );
+
           return {
             parsed,
             explanation,
             results,
             count: results.length,
+            followUpQuestions,
           };
         } catch (error) {
           console.error('[aiQuery] Error:', error);
