@@ -17,13 +17,11 @@ import { useLocation } from "wouter";
 import CytoscapeComponent from "react-cytoscapejs";
 import cytoscape from "cytoscape";
 import cola from "cytoscape-cola";
-import popper from "cytoscape-popper";
 import contextMenus from "cytoscape-context-menus";
 import "cytoscape-context-menus/cytoscape-context-menus.css";
 
 // Register Cytoscape extensions
 cytoscape.use(cola);
-cytoscape.use(popper);
 cytoscape.use(contextMenus);
 
 interface GraphNode {
@@ -284,7 +282,7 @@ export default function Graph() {
         ],
       });
 
-      // Tooltips on hover
+         // Hover tooltips (native implementation)
       cy.on("mouseover", "node", (event) => {
         const node = event.target;
         const data = node.data();
@@ -298,7 +296,7 @@ export default function Graph() {
         // Create tooltip
         const tooltip = document.createElement("div");
         tooltip.className =
-          "absolute z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 text-sm";
+          "absolute z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 text-sm pointer-events-none";
         tooltip.innerHTML = `
           <div class="font-semibold text-gray-900 dark:text-white">${data.name}</div>
           ${data.company ? `<div class="text-gray-600 dark:text-gray-400">${data.company}</div>` : ""}
@@ -306,38 +304,42 @@ export default function Graph() {
           <div class="text-gray-500 dark:text-gray-500 text-xs mt-1">${data.connections} connections</div>
         `;
 
-        tooltipRef.current = tooltip;
+        // Add to container
+        const container = cy.container();
+        if (container) {
+          container.appendChild(tooltip);
+          tooltipRef.current = tooltip;
 
-        // Position tooltip using Popper
-        const popperInstance = (node as any).popper({
-          content: () => tooltip,
-          popper: {
-            placement: "top",
-            modifiers: [
-              {
-                name: "offset",
-                options: {
-                  offset: [0, 10],
-                },
-              },
-            ],
-          },
-        });
+          // Position tooltip function
+          const updateTooltipPosition = () => {
+            const renderedPosition = node.renderedPosition();
+            const zoom = cy.zoom();
+            const pan = cy.pan();
+            
+            // Calculate position (above the node)
+            const x = renderedPosition.x;
+            const y = renderedPosition.y - (data.size / 2) * zoom - 10;
+            
+            tooltip.style.left = `${x}px`;
+            tooltip.style.top = `${y}px`;
+            tooltip.style.transform = "translate(-50%, -100%)";
+          };
 
-        // Update position on viewport changes
-        const updateTooltip = () => {
-          popperInstance.update();
-        };
-        cy.on("pan zoom resize", updateTooltip);
+          // Initial position
+          updateTooltipPosition();
 
-        // Cleanup
-        node.once("mouseout", () => {
-          cy.off("pan zoom resize", updateTooltip);
-          if (tooltipRef.current) {
-            tooltipRef.current.remove();
-            tooltipRef.current = null;
-          }
-        });
+          // Update position on viewport changes
+          cy.on("pan zoom resize", updateTooltipPosition);
+
+          // Cleanup on mouseout
+          node.once("mouseout", () => {
+            cy.off("pan zoom resize", updateTooltipPosition);
+            if (tooltipRef.current) {
+              tooltipRef.current.remove();
+              tooltipRef.current = null;
+            }
+          });
+        }
       });
 
       // Apply filters after layout

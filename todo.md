@@ -290,3 +290,7 @@
 - [x] Integrate filtering with Cytoscape
 - [x] Replace old Graph component
 - [x] Test all interactions
+
+
+## Bug Fixes
+- [x] Fix node.popper is not a function error by replacing with native tooltip implementation
