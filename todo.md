@@ -391,3 +391,20 @@
 - [x] Make suggestions clickable to execute new queries
 - [x] Show 3-5 relevant follow-up questions
 - [x] Test follow-up question generation and interaction
+
+## Database Cleanup and Sample Data
+- [x] Fix database schema issues from partial migration
+- [x] Revert contacts table to original working schema
+- [x] Drop temporary tables (userContacts, contactContributions)
+- [x] Clear all existing contacts
+- [x] Create realistic sample dataset (16 contacts)
+- [x] Use real LinkedIn-style profiles with rich data
+- [x] Add sample companies (6 companies: OpenAI, Anthropic, Microsoft, YC, Sequoia, Stripe)
+- [x] Create sample networking events (3 events)
+- [x] Add contact relationships for knowledge graph (25 relationships)
+- [x] Test all features with sample data
+
+## Collaborative Contacts System (Future)
+- [ ] Design new database schema for shared contacts
+- [ ] Implement duplicate detection and contact sharing
+- [ ] Add provenance tracking and contribution history

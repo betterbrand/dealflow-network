@@ -1,0 +1,16 @@
+{
+  "query": "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'contacts' AND COLUMN_NAME IN ('addedBy', 'createdBy')",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4Kbgdc4rJNwddMx.root --database XRJ2T4W7Twsw8KZjoKBden --execute SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'contacts' AND COLUMN_NAME IN ('addedBy', 'createdBy')",
+  "rows": [
+    {
+      "COLUMN_NAME": "addedBy"
+    },
+    {
+      "COLUMN_NAME": "createdBy"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\naddedBy\ncreatedBy\n",
+  "stderr": "",
+  "execution_time_ms": 51
+}
