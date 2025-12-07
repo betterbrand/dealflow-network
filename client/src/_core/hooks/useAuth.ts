@@ -38,6 +38,8 @@ export function useAuth(options?: UseAuthOptions) {
     } finally {
       utils.auth.me.setData(undefined, null);
       await utils.auth.me.invalidate();
+      // Reload page to show login screen
+      window.location.reload();
     }
   }, [logoutMutation, utils]);
 

@@ -448,3 +448,108 @@
 - [ ] Add collaboration UI indicators (show who else knows this contact)
 - [ ] Show contribution history in contact detail page
 - [ ] Build admin merge tool for manual duplicate resolution
+
+
+## Auth0 Integration - White-Label Authentication
+
+### Phase 1: Auth0 Setup & Configuration
+- [ ] Create Auth0 account and application
+- [ ] Configure Auth0 application settings (callback URLs, allowed origins)
+- [ ] Set up custom domain in Auth0 for white-label experience
+- [ ] Configure Universal Login branding (logo, colors, custom CSS)
+- [ ] Enable social connections (Google, GitHub, LinkedIn)
+- [ ] Set up email templates (welcome, password reset, verification)
+- [ ] Configure MFA options (SMS, authenticator app)
+- [ ] Store Auth0 credentials as secrets (DOMAIN, CLIENT_ID, CLIENT_SECRET)
+
+### Phase 2: Backend Integration
+- [ ] Install Auth0 SDK dependencies (`express-oauth2-jwt-bearer`, `auth0`)
+- [ ] Create Auth0 middleware for JWT validation
+- [ ] Replace Manus OAuth callback with Auth0 callback handler
+- [ ] Update session management to use Auth0 tokens
+- [ ] Migrate user identification from Manus openId to Auth0 sub
+- [ ] Update `protectedProcedure` to validate Auth0 JWTs
+- [ ] Create user sync logic (Auth0 → local database)
+- [ ] Add Auth0 Management API integration for user operations
+- [ ] Update logout flow to clear Auth0 session
+- [ ] Test token refresh and expiration handling
+
+### Phase 3: Frontend Integration
+- [ ] Install Auth0 React SDK (`@auth0/auth0-react`)
+- [ ] Wrap app with Auth0Provider in main.tsx
+- [ ] Replace useAuth hook with Auth0's useAuth0 hook
+- [ ] Update login button to use Auth0's loginWithRedirect
+- [ ] Update logout to use Auth0's logout method
+- [ ] Remove Manus OAuth portal references
+- [ ] Update DashboardLayout to use Auth0 user object
+- [ ] Handle Auth0 loading states and errors
+- [ ] Test authentication flow end-to-end
+- [ ] Update user profile display with Auth0 user data
+
+### Phase 4: Data Migration
+- [ ] Create migration script to map existing users
+- [ ] Export current user data (openId, email, name)
+- [ ] Import users to Auth0 via Management API or bulk import
+- [ ] Map Manus openId to Auth0 sub in database
+- [ ] Test user login with migrated accounts
+- [ ] Verify all user-specific data (contacts, notes) still accessible
+- [ ] Create rollback plan in case of issues
+
+### Phase 5: Testing & Cleanup
+- [ ] Test login flow with Google OAuth
+- [ ] Test login flow with email/password
+- [ ] Test logout and session expiration
+- [ ] Test protected routes and API endpoints
+- [ ] Verify user permissions and role-based access
+- [ ] Test on multiple browsers and devices
+- [ ] Remove all Manus OAuth code from server/_core/oauth.ts
+- [ ] Remove Manus OAuth environment variables
+- [ ] Update documentation with Auth0 setup instructions
+- [ ] Save checkpoint after successful migration
+
+### Phase 6: Production Deployment
+- [ ] Configure Auth0 production tenant
+- [ ] Set up custom domain (auth.yourdomain.com)
+- [ ] Update production environment variables
+- [ ] Test authentication on production domain
+- [ ] Monitor Auth0 logs for errors
+- [ ] Set up Auth0 alerts for anomalies
+- [ ] Document Auth0 admin procedures for team
+
+### Considerations & Notes
+- **Estimated Time:** 1-2 days for full implementation and testing
+- **Cost:** Auth0 free tier (7,500 MAU), then $35/month (Essentials) or $240/month (Professional)
+- **Custom Domain:** Requires Auth0 Essentials plan or higher for white-label auth.yourdomain.com
+- **User Migration:** Can use Auth0's automatic migration feature to migrate users on first login
+- **Rollback:** Keep Manus OAuth code in git history for 30 days in case rollback needed
+- **Alternative:** Consider Clerk if faster implementation and modern DX preferred over Auth0's enterprise features
+
+
+## Magic Link Authentication - MVP White-Label Solution
+- [ ] Create hardcoded authorized users whitelist
+- [ ] Build magic link token generation and validation
+- [ ] Set up email service for sending magic links
+- [ ] Create login page with email input
+- [ ] Build magic link verification endpoint
+- [ ] Replace Manus OAuth middleware with magic link auth
+- [ ] Update frontend to use magic link flow
+- [ ] Test magic link login end-to-end
+- [ ] Remove all Manus OAuth references
+
+
+## Magic Link Authentication (MVP)
+- [x] Create magic link token generation and verification
+- [x] Implement hardcoded user whitelist (AUTHORIZED_USERS)
+- [x] Build magic link email service (console logging for MVP)
+- [x] Create /api/auth/magic-link/request endpoint
+- [x] Create /api/auth/magic-link/verify endpoint
+- [x] Update context.ts to use magic link authentication
+- [x] Replace OAuth routes with magic link routes
+- [x] Build Login page UI
+- [x] Update App.tsx to show login when not authenticated
+- [x] Update useAuth hook for magic link logout
+- [x] Install required packages (jsonwebtoken, cookie-parser)
+- [x] Add cookie-parser middleware to Express
+- [x] Test magic link flow end-to-end (13/13 tests passing)
+- [x] Verify login UI is completely white-labeled
+- [ ] Integrate real email service (Resend/SendGrid) for production

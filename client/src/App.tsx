@@ -13,8 +13,27 @@ import Companies from "./pages/Companies";
 import CompanyDetail from "./pages/CompanyDetail";
 import Suggestions from "./pages/Suggestions";
 import AIQuery from "./pages/AIQuery";
+import Login from "./pages/Login";
+import { useAuth } from "./_core/hooks/useAuth";
 
 function Router() {
+  const { user, loading } = useAuth();
+
+  // Show loading while checking auth
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // If not logged in, show login page
+  if (!user) {
+    return <Login />;
+  }
+
+  // User is logged in, show app routes
   return (
     <Switch>
       <Route path="/" component={() => (
