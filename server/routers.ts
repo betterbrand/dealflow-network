@@ -41,13 +41,16 @@ export const appRouter = router({
     aiQuery: protectedProcedure
       .input(z.object({ query: z.string().min(1) }))
       .mutation(async ({ input }) => {
-        const { parseQuery } = await import("./services/query.service");
-        const { getDb } = await import("./db");
-        const { contacts } = await import("../drizzle/schema");
-        const { and, or, like } = await import("drizzle-orm");
+        console.log('[aiQuery] Received query:', input.query);
         
-        const db = await getDb();
-        if (!db) throw new Error("Database not available");
+        try {
+          const { parseQuery } = await import("./services/query.service");
+          const { getDb } = await import("./db");
+          const { contacts } = await import("../drizzle/schema");
+          const { and, or, like } = await import("drizzle-orm");
+          
+          const db = await getDb();
+          if (!db) throw new Error("Database not available");
 
         // Parse the natural language query
         const { parsed, explanation } = await parseQuery(input.query);
@@ -102,12 +105,16 @@ export const appRouter = router({
           .where(conditions.length > 0 ? and(...conditions) : undefined)
           .limit(50);
 
-        return {
-          parsed,
-          explanation,
-          results,
-          count: results.length,
-        };
+          return {
+            parsed,
+            explanation,
+            results,
+            count: results.length,
+          };
+        } catch (error) {
+          console.error('[aiQuery] Error:', error);
+          throw error;
+        }
       }),
     
     enrichFromLinkedIn: protectedProcedure

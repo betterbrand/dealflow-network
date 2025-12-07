@@ -346,3 +346,8 @@
 - [ ] Implement introduction path finding (who can introduce me to X)
 - [ ] Add query history
 - [ ] Add follow-up question suggestions
+
+## Bug Fixes - AI Query
+- [x] Fix "Invalid response from LLM" error in AI Query feature
+- [x] Add proper error handling and logging for LLM API responses
+- [x] Test with real queries to verify fix

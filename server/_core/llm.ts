@@ -323,6 +323,8 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error('[invokeLLM] API Error Response:', errorText);
+    console.error('[invokeLLM] Request payload:', JSON.stringify(payload, null, 2));
     throw new Error(
       `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
     );

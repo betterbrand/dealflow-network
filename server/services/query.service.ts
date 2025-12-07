@@ -27,7 +27,10 @@ export interface QueryParseResult {
  * Parse natural language query using LLM
  */
 export async function parseQuery(query: string): Promise<QueryParseResult> {
-  const systemPrompt = `You are a network query parser. Parse natural language queries about professional networks into structured filters.
+  console.log('[parseQuery] Starting query parsing for:', query);
+  
+  try {
+    const systemPrompt = `You are a network query parser. Parse natural language queries about professional networks into structured filters.
 
 Intent types:
 - "find": Finding specific contacts (e.g., "Who do I know at Microsoft?")
@@ -119,13 +122,13 @@ Only include filters that are explicitly mentioned in the query.`;
               type: "object",
               properties: {
                 from: {
-                  type: ["string", "null"],
+                  type: "string",
                 },
                 to: {
                   type: "string",
                 },
               },
-              required: ["to"],
+              required: [],
               additionalProperties: false,
             },
             explanation: {
@@ -137,25 +140,58 @@ Only include filters that are explicitly mentioned in the query.`;
         },
       },
     },
-  });
+    });
 
-  if (!response || !response.choices || response.choices.length === 0) {
-    throw new Error("Invalid response from LLM");
+    console.log('[parseQuery] LLM response received:', JSON.stringify(response, null, 2));
+
+    if (!response) {
+      console.error('[parseQuery] No response from LLM');
+      throw new Error("No response from LLM");
+    }
+
+    if (!response.choices || !Array.isArray(response.choices)) {
+      console.error('[parseQuery] Invalid response structure - missing or invalid choices array:', response);
+      throw new Error("Invalid response structure from LLM");
+    }
+
+    if (response.choices.length === 0) {
+      console.error('[parseQuery] Empty choices array in LLM response:', response);
+      throw new Error("Empty response from LLM");
+    }
+
+    const choice = response.choices[0];
+    if (!choice || !choice.message) {
+      console.error('[parseQuery] Invalid choice structure:', choice);
+      throw new Error("Invalid message structure from LLM");
+    }
+
+    const content = choice.message.content;
+    if (!content) {
+      console.error('[parseQuery] No content in LLM response:', choice.message);
+      throw new Error("No content in LLM response");
+    }
+
+    if (typeof content !== 'string') {
+      console.error('[parseQuery] Content is not a string:', typeof content, content);
+      throw new Error("LLM response content is not a string");
+    }
+
+    console.log('[parseQuery] Parsing JSON content:', content);
+    const result = JSON.parse(content);
+    
+    return {
+      parsed: {
+        intent: result.intent,
+        filters: result.filters || {},
+        introductionPath: result.introductionPath,
+      },
+      explanation: result.explanation,
+    };
+  } catch (error) {
+    console.error('[parseQuery] Error during query parsing:', error);
+    if (error instanceof Error) {
+      console.error('[parseQuery] Error stack:', error.stack);
+    }
+    throw error;
   }
-
-  const content = response.choices[0].message.content;
-  if (!content || typeof content !== 'string') {
-    throw new Error("No valid response from LLM");
-  }
-
-  const result = JSON.parse(content);
-  
-  return {
-    parsed: {
-      intent: result.intent,
-      filters: result.filters || {},
-      introductionPath: result.introductionPath,
-    },
-    explanation: result.explanation,
-  };
 }
