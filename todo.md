@@ -553,3 +553,15 @@
 - [x] Test magic link flow end-to-end (13/13 tests passing)
 - [x] Verify login UI is completely white-labeled
 - [ ] Integrate real email service (Resend/SendGrid) for production
+
+
+## Admin User Management
+- [x] Create backend procedures for listing authorized users
+- [x] Create backend procedure for adding users to whitelist
+- [x] Create backend procedure for removing users from whitelist
+- [x] Build admin UI page with user list table
+- [x] Add form for adding new authorized users
+- [x] Add remove button for each user in list
+- [x] Implement admin-only access control
+- [x] Write comprehensive tests (15/15 passing)
+- [x] Add Admin Users navigation item to sidebar

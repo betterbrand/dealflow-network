@@ -13,6 +13,7 @@ import Companies from "./pages/Companies";
 import CompanyDetail from "./pages/CompanyDetail";
 import Suggestions from "./pages/Suggestions";
 import AIQuery from "./pages/AIQuery";
+import AdminUsers from "./pages/AdminUsers";
 import Login from "./pages/Login";
 import { useAuth } from "./_core/hooks/useAuth";
 
@@ -74,6 +75,11 @@ function Router() {
       <Route path="/ai-query" component={() => (
         <DashboardLayout>
           <AIQuery />
+        </DashboardLayout>
+      )} />
+      <Route path="/admin/users" component={() => (
+        <DashboardLayout>
+          <AdminUsers />
         </DashboardLayout>
       )} />
       <Route path="/404" component={NotFound} />

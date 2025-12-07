@@ -705,6 +705,44 @@ export const appRouter = router({
       return await clearQueryHistory(ctx.user.id);
     }),
   }),
+
+  admin: router({
+    listUsers: protectedProcedure.query(async ({ ctx }) => {
+      // Only allow admin users (first user in whitelist is considered admin)
+      const { listAuthorizedUsers } = await import("./_core/admin-users");
+      const users = listAuthorizedUsers();
+      if (!ctx.user.email || !users.includes(ctx.user.email)) {
+        throw new Error("Unauthorized: Admin access required");
+      }
+      return users;
+    }),
+
+    addUser: protectedProcedure
+      .input(z.object({ email: z.string().email() }))
+      .mutation(async ({ input, ctx }) => {
+        const { listAuthorizedUsers, addAuthorizedUser } = await import("./_core/admin-users");
+        const users = listAuthorizedUsers();
+        if (!ctx.user.email || !users.includes(ctx.user.email)) {
+          throw new Error("Unauthorized: Admin access required");
+        }
+        return addAuthorizedUser(input.email);
+      }),
+
+    removeUser: protectedProcedure
+      .input(z.object({ email: z.string().email() }))
+      .mutation(async ({ input, ctx }) => {
+        const { listAuthorizedUsers, removeAuthorizedUser } = await import("./_core/admin-users");
+        const users = listAuthorizedUsers();
+        if (!ctx.user.email || !users.includes(ctx.user.email)) {
+          throw new Error("Unauthorized: Admin access required");
+        }
+        // Prevent users from removing themselves
+        if (ctx.user.email && input.email.toLowerCase() === ctx.user.email.toLowerCase()) {
+          return { success: false, message: "Cannot remove yourself" };
+        }
+        return removeAuthorizedUser(input.email);
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
