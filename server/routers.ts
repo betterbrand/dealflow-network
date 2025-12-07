@@ -198,6 +198,112 @@ export const appRouter = router({
         return { success: true };
       }),
     
+    getSuggestions: protectedProcedure.query(async ({ ctx }) => {
+      const { getAllContacts } = await import("./db");
+      const { contactRelationships } = await import("../drizzle/schema");
+      const { getDb } = await import("./db");
+      const { eq } = await import("drizzle-orm");
+
+      // Get all contacts for the user
+      const allContactsData = await getAllContacts(ctx.user.id);
+      const contacts = allContactsData.map(c => c.contact);
+
+      // Get existing relationships
+      const db = await getDb();
+      if (!db) return [];
+      
+      // Get all relationships involving the user's contacts
+      const contactIds = contacts.map(c => c.id);
+      const { inArray, or } = await import("drizzle-orm");
+      
+      const existingRelationships = await db
+        .select()
+        .from(contactRelationships)
+        .where(
+          or(
+            inArray(contactRelationships.fromContactId, contactIds),
+            inArray(contactRelationships.toContactId, contactIds)
+          )
+        );
+
+      const existingPairs = new Set(
+        existingRelationships.map((r: any) =>
+          [r.fromContactId, r.toContactId].sort().join("-")
+        )
+      );
+
+      // Find potential connections
+      const suggestions: Array<{
+        contact1: typeof contacts[0];
+        contact2: typeof contacts[0];
+        reason: string;
+        confidence: "high" | "medium" | "low";
+      }> = [];
+
+      for (let i = 0; i < contacts.length; i++) {
+        for (let j = i + 1; j < contacts.length; j++) {
+          const c1 = contacts[i];
+          const c2 = contacts[j];
+          const pairKey = [c1.id, c2.id].sort().join("-");
+
+          // Skip if relationship already exists
+          if (existingPairs.has(pairKey)) continue;
+
+          const reasons: string[] = [];
+          let confidence: "high" | "medium" | "low" = "low";
+
+          // Check shared company
+          if (
+            c1.company &&
+            c2.company &&
+            c1.company.toLowerCase() === c2.company.toLowerCase()
+          ) {
+            reasons.push(`both work at ${c1.company}`);
+            confidence = "high";
+          }
+
+          // Check shared location
+          if (
+            c1.location &&
+            c2.location &&
+            c1.location.toLowerCase().includes(c2.location.toLowerCase())
+          ) {
+            reasons.push(`both in ${c1.location}`);
+            if (confidence === "low") confidence = "medium";
+          }
+
+          // Check similar roles
+          if (c1.role && c2.role) {
+            const role1 = c1.role.toLowerCase();
+            const role2 = c2.role.toLowerCase();
+            const commonTerms = ["ceo", "cto", "cfo", "founder", "vp", "director"];
+            const sharedRole = commonTerms.find(
+              (term) => role1.includes(term) && role2.includes(term)
+            );
+            if (sharedRole) {
+              reasons.push(`both are ${sharedRole}s`);
+              if (confidence === "low") confidence = "medium";
+            }
+          }
+
+          if (reasons.length > 0) {
+            suggestions.push({
+              contact1: c1,
+              contact2: c2,
+              reason: reasons.join(" and "),
+              confidence,
+            });
+          }
+        }
+      }
+
+      // Sort by confidence (high > medium > low) and limit to top 10
+      const confidenceOrder = { high: 3, medium: 2, low: 1 };
+      return suggestions
+        .sort((a, b) => confidenceOrder[b.confidence] - confidenceOrder[a.confidence])
+        .slice(0, 10);
+    }),
+
     getGraph: protectedProcedure.query(async ({ ctx }) => {
       const { getAllContacts } = await import("./db");
       const { contactRelationships } = await import("../drizzle/schema");

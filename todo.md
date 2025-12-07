@@ -311,3 +311,13 @@
 - [ ] Add introduction path finder ("Who can introduce me to X?")
 - [ ] Create query history and saved searches
 - [ ] Add smart suggestions based on query patterns
+
+
+## Smart Relationship Suggestions
+- [x] Build backend algorithm to find potential connections based on shared attributes
+- [x] Create tRPC procedure to get relationship suggestions
+- [x] Design suggestions UI with approve/dismiss workflow
+- [x] Add suggestion cards showing shared context (company, role, location)
+- [x] Implement one-click relationship creation from suggestions
+- [x] Add dismiss/ignore functionality for irrelevant suggestions
+- [x] Test suggestion accuracy and relevance

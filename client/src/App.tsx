@@ -11,6 +11,7 @@ import ContactDetail from "./pages/ContactDetail";
 import Graph from "./pages/Graph";
 import Companies from "./pages/Companies";
 import CompanyDetail from "./pages/CompanyDetail";
+import Suggestions from "./pages/Suggestions";
 
 function Router() {
   return (
@@ -43,6 +44,11 @@ function Router() {
       <Route path="/companies/:id" component={() => (
         <DashboardLayout>
           <CompanyDetail />
+        </DashboardLayout>
+      )} />
+      <Route path="/suggestions" component={() => (
+        <DashboardLayout>
+          <Suggestions />
         </DashboardLayout>
       )} />
       <Route path="/404" component={NotFound} />
