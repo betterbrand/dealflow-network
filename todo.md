@@ -294,3 +294,8 @@
 
 ## Bug Fixes
 - [x] Fix node.popper is not a function error by replacing with native tooltip implementation
+
+
+## Graph Layout Improvements
+- [x] Replace cola layout with fCoSE layout for better node distribution
+- [x] Test fCoSE layout performance and visual quality

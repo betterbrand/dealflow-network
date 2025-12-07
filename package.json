@@ -54,6 +54,7 @@
     "cytoscape": "^3.33.1",
     "cytoscape-cola": "^2.5.1",
     "cytoscape-context-menus": "^4.2.1",
+    "cytoscape-fcose": "^2.2.0",
     "cytoscape-popper": "^4.0.1",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.2",

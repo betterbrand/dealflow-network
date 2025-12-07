@@ -16,12 +16,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import CytoscapeComponent from "react-cytoscapejs";
 import cytoscape from "cytoscape";
-import cola from "cytoscape-cola";
+import fcose from "cytoscape-fcose";
 import contextMenus from "cytoscape-context-menus";
 import "cytoscape-context-menus/cytoscape-context-menus.css";
 
 // Register Cytoscape extensions
-cytoscape.use(cola);
+cytoscape.use(fcose);
 cytoscape.use(contextMenus);
 
 interface GraphNode {
@@ -218,24 +218,49 @@ export default function Graph() {
     },
   ];
 
-  // Layout configuration
+  // Layout configuration - fCoSE (fast Compound Spring Embedder)
   const layout = {
-    name: "cola",
+    name: "fcose",
+    // Quality vs Speed
+    quality: "default", // 'draft', 'default' or 'proof'
+    // Use random initial positions for nodes
+    randomize: true,
+    // Whether to animate the layout
     animate: true,
-    refresh: 1,
-    maxSimulationTime: 4000,
-    ungrabifyWhileSimulating: false,
+    // Duration of animation in ms
+    animationDuration: 1000,
+    // Easing of animation
+    animationEasing: undefined,
+    // Fit the viewport to the repositioned nodes
     fit: true,
+    // Padding around the simulation
     padding: 30,
+    // Whether to include labels in node dimensions
     nodeDimensionsIncludeLabels: true,
-    randomize: false,
-    avoidOverlap: true,
-    handleDisconnected: true,
-    convergenceThreshold: 0.01,
-    nodeSpacing: 50,
-    flow: undefined,
-    alignment: undefined,
-    gapInequalities: undefined,
+    // Whether to prevent node overlap
+    nodeRepulsion: 4500,
+    // Ideal edge length
+    idealEdgeLength: 50,
+    // Divisor to compute edge forces
+    edgeElasticity: 0.45,
+    // Nesting factor (multiplier) to compute ideal edge length for nested edges
+    nestingFactor: 0.1,
+    // Gravity force (constant)
+    gravity: 0.25,
+    // Maximum number of iterations
+    numIter: 2500,
+    // For enabling tiling
+    tile: true,
+    // Represents the amount of the vertical space to put between the zero degree members during the tiling operation
+    tilingPaddingVertical: 10,
+    // Represents the amount of the horizontal space to put between the zero degree members during the tiling operation
+    tilingPaddingHorizontal: 10,
+    // Gravity range (constant) for compounds
+    gravityRangeCompound: 1.5,
+    // Gravity force (constant) for compounds
+    gravityCompound: 1.0,
+    // Gravity range (constant)
+    gravityRange: 3.8,
   };
 
   // Initialize Cytoscape instance
