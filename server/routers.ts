@@ -26,9 +26,9 @@ export const appRouter = router({
     
     get: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .query(async ({ input }) => {
-        const { getContactById } = await import("./db");
-        return await getContactById(input.id);
+      .query(async ({ input, ctx }) => {
+        const { getUserContact } = await import("./db-collaborative");
+        return await getUserContact(ctx.user.id, input.id);
       }),
     
     search: protectedProcedure
@@ -162,15 +162,26 @@ export const appRouter = router({
         companyId: z.number().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        const { createContact } = await import("./db");
+        const { createOrLinkContact } = await import("./db-collaborative");
         const { getDb } = await import("./db");
         const { socialProfiles } = await import("../drizzle/schema");
         const { enrichContactBackground } = await import("./enrichment");
         
-        const contactId = await createContact({
-          ...input,
-          addedBy: ctx.user.id,
-        });
+        // Separate shared contact data from user-specific data
+        const { notes, conversationSummary, actionItems, sentiment, interestLevel, eventId, ...contactData } = input;
+        
+        const { contactId, isNew, matchedBy } = await createOrLinkContact(
+          ctx.user.id,
+          contactData,
+          {
+            privateNotes: notes,
+            conversationSummary,
+            actionItems,
+            sentiment,
+            interestLevel,
+            eventId,
+          }
+        );
         
         // Store social profiles and trigger enrichment
         const db = await getDb();
@@ -576,38 +587,43 @@ export const appRouter = router({
         // Extract contact data using Morpheus AI
         const extracted = await extractContactFromConversation(input.conversationText);
         
-        // Create a temporary contact record for confirmation
+        // Create contact using collaborative model
+        const { createOrLinkContact } = await import("./db-collaborative");
         const db = await getDb();
         if (!db) throw new Error("Database not available");
         
-        const [contact] = await db.insert(contacts).values({
-          name: extracted.name,
-          company: extracted.company,
-          role: extracted.role,
-          email: extracted.email,
-          phone: extracted.phone,
-          location: extracted.location,
-          telegramUsername: extracted.telegramUsername,
-          conversationSummary: extracted.conversationSummary,
-          actionItems: extracted.actionItems,
-          sentiment: extracted.sentiment,
-          interestLevel: extracted.interestLevel,
-          addedBy: ctx.user.id,
-        }).$returningId();
+        const { contactId, isNew, matchedBy } = await createOrLinkContact(
+          ctx.user.id,
+          {
+            name: extracted.name,
+            company: extracted.company,
+            role: extracted.role,
+            email: extracted.email,
+            phone: extracted.phone,
+            location: extracted.location,
+            telegramUsername: extracted.telegramUsername,
+          },
+          {
+            conversationSummary: extracted.conversationSummary,
+            actionItems: extracted.actionItems,
+            sentiment: extracted.sentiment,
+            interestLevel: extracted.interestLevel,
+          }
+        );
         
         // Store social profiles if found
         if (extracted.linkedinUrl || extracted.twitterUrl) {
           const profiles = [];
           if (extracted.linkedinUrl) {
             profiles.push({
-              contactId: contact.id,
+              contactId,
               platform: "linkedin" as const,
               url: extracted.linkedinUrl,
             });
           }
           if (extracted.twitterUrl) {
             profiles.push({
-              contactId: contact.id,
+              contactId,
               platform: "twitter" as const,
               url: extracted.twitterUrl,
             });
@@ -629,8 +645,10 @@ export const appRouter = router({
         
         return {
           success: true,
-          contactId: contact.id,
+          contactId,
           extracted,
+          isNew,
+          matchedBy,
         };
       }),
     

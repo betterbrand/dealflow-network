@@ -404,7 +404,47 @@
 - [x] Add contact relationships for knowledge graph (25 relationships)
 - [x] Test all features with sample data
 
-## Collaborative Contacts System (Future)
+## Collaborative Contacts System
 - [ ] Design new database schema for shared contacts
-- [ ] Implement duplicate detection and contact sharing
-- [ ] Add provenance tracking and contribution history
+- [ ] Create userContacts junction table for user-contact relationships
+- [ ] Create contactContributions table for provenance tracking
+- [ ] Implement duplicate detection logic (email, LinkedIn, name+company)
+- [ ] Update createContact to check for duplicates and link users
+- [ ] Add user-specific fields (private notes, relationship context)
+- [ ] Update getAllContacts to show shared contacts
+- [ ] Add collaboration indicators in UI (who else knows this contact)
+- [ ] Show contribution history (who added/updated what)
+- [ ] Migrate existing contacts to new schema safely
+
+## Bulk Contact Import
+- [ ] Create CSV parser for contact imports
+- [ ] Support LinkedIn export format
+- [ ] Build import preview with duplicate detection
+- [ ] Add field mapping UI for custom CSV formats
+- [ ] Implement batch contact creation with progress tracking
+- [ ] Add import history and rollback capability
+- [ ] Create import UI page with drag-drop upload
+
+## Contact Scoring System
+- [ ] Design scoring algorithm (relationship strength, interaction frequency, strategic value)
+- [ ] Add score field to contacts/userContacts table
+- [ ] Implement scoring calculation logic
+- [ ] Create background job to update scores periodically
+- [ ] Add score-based sorting and filtering
+- [ ] Show score badges in contact cards
+- [ ] Create "Top Contacts" dashboard widget
+
+## Collaborative Contacts System - COMPLETED ✅
+- [x] Design new database schema for shared contacts
+- [x] Create userContacts junction table for user-contact relationships  
+- [x] Create contactContributions table for provenance tracking
+- [x] Implement duplicate detection logic (email, LinkedIn, name+company)
+- [x] Create createOrLinkContact function with automatic duplicate detection
+- [x] Add user-specific fields (privateNotes, relationshipStrength, howWeMet, etc.)
+- [x] Migrate existing 16 contacts to new collaborative schema
+- [x] Update backend procedures to use collaborative model
+- [x] Add backward compatibility layer for frontend
+- [x] Fix all TypeScript errors from schema migration
+- [ ] Add collaboration UI indicators (show who else knows this contact)
+- [ ] Show contribution history in contact detail page
+- [ ] Build admin merge tool for manual duplicate resolution

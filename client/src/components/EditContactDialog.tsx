@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import type { Contact } from "../../../drizzle/schema";
 
 interface EditContactDialogProps {
-  contact: Contact;
+  contact: Contact & { notes?: string | null; sentiment?: string | null; interestLevel?: string | null };
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;

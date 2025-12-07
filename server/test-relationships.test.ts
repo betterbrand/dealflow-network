@@ -16,13 +16,13 @@ describe('Relationship Management', () => {
     const [contact1] = await db.insert(contacts).values({
       name: 'Test Contact 1',
       company: 'Test Company 1',
-      addedBy: 1,
+      createdBy: 1,
     }).$returningId();
 
     const [contact2] = await db.insert(contacts).values({
       name: 'Test Contact 2',
       company: 'Test Company 2',
-      addedBy: 1,
+      createdBy: 1,
     }).$returningId();
 
     testContactId1 = contact1.id;

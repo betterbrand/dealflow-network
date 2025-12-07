@@ -97,6 +97,10 @@ export async function getUserByOpenId(openId: string) {
 
 // ========== CONTACTS ==========
 
+/**
+ * @deprecated Use createOrLinkContact from db-collaborative.ts instead
+ * This function is kept for backward compatibility but doesn't support collaborative features
+ */
 export async function createContact(data: InsertContact) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -105,6 +109,10 @@ export async function createContact(data: InsertContact) {
   return contact.id;
 }
 
+/**
+ * @deprecated Use getUserContact from db-collaborative.ts instead
+ * This function returns raw contact data without user-specific fields
+ */
 export async function getContactById(id: number) {
   const db = await getDb();
   if (!db) return null;
@@ -113,23 +121,70 @@ export async function getContactById(id: number) {
   return result[0] || null;
 }
 
+/**
+ * @deprecated Use getUserContacts from db-collaborative.ts instead
+ * This function is kept for backward compatibility
+ */
 export async function getAllContacts(userId?: number) {
   const db = await getDb();
   if (!db) return [];
   
+  if (userId) {
+    // Use collaborative model
+    const { getUserContacts } = await import("./db-collaborative");
+    const userContactsData = await getUserContacts(userId);
+    
+    // Transform to old format for backward compatibility
+    return userContactsData.map(uc => ({
+      contact: {
+        id: uc.id,
+        name: uc.name,
+        email: uc.email,
+        phone: uc.phone,
+        company: uc.company,
+        role: uc.role,
+        location: uc.location,
+        linkedinUrl: uc.linkedinUrl,
+        twitterUrl: uc.twitterUrl,
+        telegramUsername: uc.telegramUsername,
+        summary: uc.summary,
+        profilePictureUrl: uc.profilePictureUrl,
+        photoUrl: uc.photoUrl,
+        experience: uc.experience,
+        education: uc.education,
+        skills: uc.skills,
+        companyId: uc.companyId,
+        createdBy: uc.createdBy,
+        createdAt: uc.createdAt,
+        updatedAt: uc.updatedAt,
+        // Map user-specific fields back to contact for compatibility
+        notes: uc.privateNotes,
+        conversationSummary: uc.conversationSummary,
+        actionItems: uc.actionItems,
+        sentiment: uc.sentiment,
+        interestLevel: uc.interestLevel,
+      },
+      company: null, // TODO: join companies if needed
+      event: null, // Event is now in userContacts
+    }));
+  }
+  
+  // Fallback: return all contacts (admin view)
   const query = db.select({
     contact: contacts,
     company: companies,
-    event: events,
   })
   .from(contacts)
   .leftJoin(companies, eq(contacts.companyId, companies.id))
-  .leftJoin(events, eq(contacts.eventId, events.id))
   .orderBy(desc(contacts.createdAt));
   
-  return await query;
+  const result = await query;
+  return result.map(r => ({ ...r, event: null }));
 }
 
+/**
+ * @deprecated Use updateContactSharedData or updateUserContactData from db-collaborative.ts
+ */
 export async function updateContact(id: number, data: Partial<InsertContact>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -137,6 +192,9 @@ export async function updateContact(id: number, data: Partial<InsertContact>) {
   await db.update(contacts).set(data).where(eq(contacts.id, id));
 }
 
+/**
+ * @deprecated Use unlinkUserContact from db-collaborative.ts instead
+ */
 export async function deleteContact(id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -149,14 +207,12 @@ export async function searchContacts(query: string) {
   if (!db) return [];
   
   const searchPattern = `%${query}%`;
-  return await db.select({
+  const result = db.select({
     contact: contacts,
     company: companies,
-    event: events,
   })
   .from(contacts)
   .leftJoin(companies, eq(contacts.companyId, companies.id))
-  .leftJoin(events, eq(contacts.eventId, events.id))
   .where(
     or(
       like(contacts.name, searchPattern),
@@ -164,8 +220,9 @@ export async function searchContacts(query: string) {
       like(contacts.role, searchPattern),
       like(contacts.location, searchPattern)
     )
-  )
-  .orderBy(desc(contacts.createdAt));
+  )  .orderBy(desc(contacts.createdAt));
+  
+  return await result;
 }
 
 // ========== COMPANIES ==========

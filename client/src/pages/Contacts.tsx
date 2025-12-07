@@ -83,7 +83,7 @@ export default function Contacts() {
                       </TableCell>
                       <TableCell>{item.contact.company || "-"}</TableCell>
                       <TableCell>{item.contact.role || "-"}</TableCell>
-                      <TableCell>{item.event?.name || "-"}</TableCell>
+                      <TableCell>{(item as any).event?.name || "-"}</TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {new Date(item.contact.createdAt).toLocaleDateString()}
                       </TableCell>

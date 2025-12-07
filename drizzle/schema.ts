@@ -26,40 +26,95 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
 /**
- * Contacts table - stores people met at networking events
+ * Contacts table - SHARED contact pool across all users
+ * Stores core contact information that is collaborative and shared
  */
 export const contacts = mysqlTable("contacts", {
   id: int("id").autoincrement().primaryKey(),
+  // Core identity fields (used for deduplication)
   name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 320 }), // Primary dedup key
+  linkedinUrl: varchar("linkedinUrl", { length: 500 }), // Secondary dedup key
+  phone: varchar("phone", { length: 50 }),
+  telegramUsername: varchar("telegramUsername", { length: 255 }),
+  
+  // Professional info (shared)
   company: varchar("company", { length: 255 }),
   role: varchar("role", { length: 255 }),
   location: varchar("location", { length: 255 }),
-  email: varchar("email", { length: 320 }),
-  phone: varchar("phone", { length: 50 }),
-  telegramUsername: varchar("telegramUsername", { length: 255 }),
-  photoUrl: text("photoUrl"),
-  notes: text("notes"),
-  conversationSummary: text("conversationSummary"),
-  actionItems: text("actionItems"),
-  sentiment: varchar("sentiment", { length: 50 }),
-  interestLevel: varchar("interestLevel", { length: 50 }),
-  // Enriched data from LinkedIn/Twitter
-  linkedinUrl: varchar("linkedinUrl", { length: 500 }),
+  
+  // Enriched data from LinkedIn/Twitter (shared)
   twitterUrl: varchar("twitterUrl", { length: 500 }),
   summary: text("summary"),
   profilePictureUrl: text("profilePictureUrl"),
+  photoUrl: text("photoUrl"), // Deprecated, use profilePictureUrl
   experience: text("experience"), // JSON array
   education: text("education"), // JSON array
   skills: text("skills"), // JSON array
-  addedBy: int("addedBy").notNull().references(() => users.id),
-  eventId: int("eventId").references(() => events.id),
+  
+  // Metadata
   companyId: int("companyId").references(() => companies.id),
+  createdBy: int("createdBy").notNull().references(() => users.id), // Who first created this contact
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type Contact = typeof contacts.$inferSelect;
 export type InsertContact = typeof contacts.$inferInsert;
+
+/**
+ * User-Contact junction table - tracks which users know which contacts
+ * Stores user-specific relationship data and private information
+ */
+export const userContacts = mysqlTable("userContacts", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  contactId: int("contactId").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  
+  // User-specific relationship data
+  privateNotes: text("privateNotes"), // Private notes only this user can see
+  relationshipStrength: varchar("relationshipStrength", { length: 50 }), // strong, medium, weak
+  howWeMet: text("howWeMet"), // Context of how this user met the contact
+  lastContactedAt: timestamp("lastContactedAt"),
+  sentiment: varchar("sentiment", { length: 50 }), // User's sentiment about this contact
+  interestLevel: varchar("interestLevel", { length: 50 }), // User's interest level
+  
+  // Conversation data (user-specific)
+  conversationSummary: text("conversationSummary"),
+  actionItems: text("actionItems"),
+  
+  // Event context
+  eventId: int("eventId").references(() => events.id),
+  
+  // Metadata
+  addedAt: timestamp("addedAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type UserContact = typeof userContacts.$inferSelect;
+export type InsertUserContact = typeof userContacts.$inferInsert;
+
+/**
+ * Contact contributions table - tracks who added/updated what fields
+ * Provides full provenance and audit trail for collaborative editing
+ */
+export const contactContributions = mysqlTable("contactContributions", {
+  id: int("id").autoincrement().primaryKey(),
+  contactId: int("contactId").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  userId: int("userId").notNull().references(() => users.id),
+  
+  // What was changed
+  fieldName: varchar("fieldName", { length: 100 }).notNull(), // e.g., "linkedinUrl", "summary", "role"
+  oldValue: text("oldValue"),
+  newValue: text("newValue"),
+  changeType: varchar("changeType", { length: 50 }).notNull(), // "created", "updated", "enriched"
+  
+  // Metadata
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ContactContribution = typeof contactContributions.$inferSelect;
+export type InsertContactContribution = typeof contactContributions.$inferInsert;
 
 /**
  * Companies table - stores organizations that contacts work for

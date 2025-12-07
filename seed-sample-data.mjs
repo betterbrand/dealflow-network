@@ -554,12 +554,22 @@ async function seed() {
       const companyId = companyIds[contact.company] || null;
       const eventId = contact.eventId ? eventIds[contact.eventId] : null;
       
+      // Insert into contacts table (shared data only)
       const [result] = await connection.query(
-        `INSERT INTO contacts (name, company, role, location, email, linkedinUrl, twitterUrl, summary, experience, education, skills, sentiment, interestLevel, notes, addedBy, eventId, companyId, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
-        [contact.name, contact.company, contact.role, contact.location, contact.email, contact.linkedinUrl, contact.twitterUrl, contact.summary, contact.experience, contact.education, contact.skills, contact.sentiment, contact.interestLevel, contact.notes, OWNER_USER_ID, eventId, companyId]
+        `INSERT INTO contacts (name, company, role, location, email, linkedinUrl, twitterUrl, summary, experience, education, skills, companyId, createdBy, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+        [contact.name, contact.company, contact.role, contact.location, contact.email, contact.linkedinUrl, contact.twitterUrl, contact.summary, contact.experience, contact.education, contact.skills, companyId, OWNER_USER_ID]
       );
-      contactIds.push({ id: result.insertId, name: contact.name, company: contact.company });
+      const contactId = result.insertId;
+      
+      // Insert into userContacts table (user-specific data)
+      await connection.query(
+        `INSERT INTO userContacts (userId, contactId, privateNotes, sentiment, interestLevel, eventId, addedAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+        [OWNER_USER_ID, contactId, contact.notes, contact.sentiment, contact.interestLevel, eventId]
+      );
+      
+      contactIds.push({ id: contactId, name: contact.name, company: contact.company });
     }
     
     console.log(`[Seed] Inserted ${contacts.length} contacts`);

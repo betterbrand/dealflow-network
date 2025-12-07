@@ -27,7 +27,7 @@ describe("Smart Relationship Suggestions", () => {
       company: "Acme Corp",
       role: "CEO",
       location: "San Francisco, CA",
-      addedBy: 1,
+      createdBy: 1,
     }).$returningId();
 
     const [contact2] = await db.insert(contactsTable).values({
@@ -35,7 +35,7 @@ describe("Smart Relationship Suggestions", () => {
       company: "Acme Corp", // Same company as contact1
       role: "CTO",
       location: "San Francisco, CA", // Same location as contact1
-      addedBy: 1,
+      createdBy: 1,
     }).$returningId();
 
     const [contact3] = await db.insert(contactsTable).values({
@@ -43,7 +43,7 @@ describe("Smart Relationship Suggestions", () => {
       company: "Different Corp",
       role: "CEO", // Same role as contact1
       location: "New York, NY",
-      addedBy: 1,
+      createdBy: 1,
     }).$returningId();
 
     const [contact4] = await db.insert(contactsTable).values({
@@ -51,7 +51,7 @@ describe("Smart Relationship Suggestions", () => {
       company: "Another Corp",
       role: "Engineer",
       location: "San Francisco, CA", // Same location as contact1 and contact2
-      addedBy: 1,
+      createdBy: 1,
     }).$returningId();
 
     testContactIds = [contact1.id, contact2.id, contact3.id, contact4.id];

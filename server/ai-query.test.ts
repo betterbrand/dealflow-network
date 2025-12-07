@@ -19,7 +19,7 @@ describe("AI Query Feature", () => {
         role: "CEO",
         location: "Seattle",
         email: "alice@microsoft.com",
-        addedBy: 1,
+        createdBy: 1,
       },
       {
         name: "Bob Smith",
@@ -27,7 +27,7 @@ describe("AI Query Feature", () => {
         role: "CTO",
         location: "Seattle",
         email: "bob@microsoft.com",
-        addedBy: 1,
+        createdBy: 1,
       },
       {
         name: "Charlie Brown",
@@ -35,7 +35,7 @@ describe("AI Query Feature", () => {
         role: "Engineer",
         location: "San Francisco",
         email: "charlie@google.com",
-        addedBy: 1,
+        createdBy: 1,
       },
       {
         name: "Diana Prince",
@@ -43,7 +43,7 @@ describe("AI Query Feature", () => {
         role: "VP Product",
         location: "Seattle",
         email: "diana@amazon.com",
-        addedBy: 1,
+        createdBy: 1,
       },
     ];
 

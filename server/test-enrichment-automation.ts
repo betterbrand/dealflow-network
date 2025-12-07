@@ -17,7 +17,7 @@ async function testEnrichmentAutomation() {
       company: "Microsoft",
       role: "CEO",
       linkedinUrl: "https://www.linkedin.com/in/satyanadella",
-      addedBy: 1, // Assuming user ID 1 exists
+      createdBy: 1, // Assuming user ID 1 exists
     });
     console.log(`✓ Contact created with ID: ${contactId}\n`);
     
