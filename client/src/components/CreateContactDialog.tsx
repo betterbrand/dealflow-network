@@ -14,10 +14,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
+import { Plus, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+
+type ImportStep = "import" | "review";
 
 export function CreateContactDialog() {
   const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<ImportStep>("import");
+  const [profileUrl, setProfileUrl] = useState("");
+  const [isEnriching, setIsEnriching] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     company: "",
@@ -32,28 +37,93 @@ export function CreateContactDialog() {
   });
 
   const utils = trpc.useUtils();
+  const enrichMutation = trpc.contacts.enrichFromLinkedIn.useMutation();
   const createMutation = trpc.contacts.create.useMutation({
     onSuccess: () => {
       toast.success("Contact created successfully!");
       utils.contacts.list.invalidate();
-      setOpen(false);
-      setFormData({
-        name: "",
-        company: "",
-        role: "",
-        email: "",
-        phone: "",
-        location: "",
-        telegramUsername: "",
-        linkedinUrl: "",
-        twitterUrl: "",
-        notes: "",
-      });
+      utils.graph.getData.invalidate();
+      resetDialog();
     },
     onError: (error) => {
       toast.error(`Failed to create contact: ${error.message}`);
     },
   });
+
+  const resetDialog = () => {
+    setOpen(false);
+    setStep("import");
+    setProfileUrl("");
+    setFormData({
+      name: "",
+      company: "",
+      role: "",
+      email: "",
+      phone: "",
+      location: "",
+      telegramUsername: "",
+      linkedinUrl: "",
+      twitterUrl: "",
+      notes: "",
+    });
+  };
+
+  const handleImport = async () => {
+    if (!profileUrl.trim()) {
+      toast.error("Please enter a LinkedIn or X/Twitter profile URL");
+      return;
+    }
+
+    // Validate URL format
+    const isLinkedIn = profileUrl.includes("linkedin.com");
+    const isTwitter = profileUrl.includes("twitter.com") || profileUrl.includes("x.com");
+
+    if (!isLinkedIn && !isTwitter) {
+      toast.error("Please enter a valid LinkedIn or X/Twitter URL");
+      return;
+    }
+
+    setIsEnriching(true);
+
+    try {
+      if (isLinkedIn) {
+        // Use existing LinkedIn enrichment
+        const enriched = await enrichMutation.mutateAsync({ linkedinUrl: profileUrl });
+        
+        // Extract company and role from most recent experience
+        const latestExperience = enriched.experience?.[0];
+        
+        setFormData({
+          name: enriched.name || "",
+          company: latestExperience?.company || "",
+          role: latestExperience?.title || enriched.headline || "",
+          email: "",
+          phone: "",
+          location: enriched.location || "",
+          telegramUsername: "",
+          linkedinUrl: profileUrl,
+          twitterUrl: "",
+          notes: enriched.summary || "",
+        });
+        
+        toast.success("Profile imported successfully!");
+        setStep("review");
+      } else {
+        // Twitter/X enrichment - for now, just set the URL and let user fill in
+        // TODO: Implement X/Twitter enrichment service
+        setFormData({
+          ...formData,
+          twitterUrl: profileUrl,
+        });
+        toast.info("X/Twitter enrichment coming soon. Please fill in the details manually.");
+        setStep("review");
+      }
+    } catch (error: any) {
+      toast.error(`Failed to import profile: ${error.message}`);
+    } finally {
+      setIsEnriching(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,7 +148,10 @@ export function CreateContactDialog() {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(isOpen) => {
+      setOpen(isOpen);
+      if (!isOpen) resetDialog();
+    }}>
       <DialogTrigger asChild>
         <Button>
           <Plus className="mr-2 h-4 w-4" />
@@ -86,138 +159,223 @@ export function CreateContactDialog() {
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>Create New Contact</DialogTitle>
-            <DialogDescription>
-              Add a new contact to your network. Fill in as much information as you have.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="name">
-                Name <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="John Doe"
-                required
-              />
+        {step === "import" ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>Import Contact</DialogTitle>
+              <DialogDescription>
+                Start by importing a LinkedIn or X/Twitter profile. We'll automatically fill in the details.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-6">
+              <div className="space-y-4">
+                <div className="grid gap-3">
+                  <Label htmlFor="profileUrl" className="text-base">
+                    Profile URL <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="profileUrl"
+                    value={profileUrl}
+                    onChange={(e) => setProfileUrl(e.target.value)}
+                    placeholder="https://linkedin.com/in/username or https://x.com/username"
+                    className="text-base"
+                    disabled={isEnriching}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleImport();
+                      }
+                    }}
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Paste a LinkedIn or X/Twitter profile URL to automatically import contact details
+                  </p>
+                </div>
+
+                {isEnriching && (
+                  <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                    <div>
+                      <p className="font-medium text-blue-900">Importing profile...</p>
+                      <p className="text-sm text-blue-700">This may take a few seconds</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-3 pt-4">
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium">LinkedIn Import</p>
+                      <p className="text-sm text-muted-foreground">
+                        Automatically imports name, company, role, location, and bio
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium">X/Twitter Import</p>
+                      <p className="text-sm text-muted-foreground">
+                        Coming soon - manual entry required for now
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-            
-            <div className="grid grid-cols-2 gap-4">
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={resetDialog}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleImport} 
+                disabled={isEnriching || !profileUrl.trim()}
+              >
+                {isEnriching ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Importing...
+                  </>
+                ) : (
+                  "Import Profile"
+                )}
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <form onSubmit={handleSubmit}>
+            <DialogHeader>
+              <DialogTitle>Review & Edit Contact</DialogTitle>
+              <DialogDescription>
+                Review the imported information and make any necessary edits.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="company">Company</Label>
+                <Label htmlFor="name">
+                  Name <span className="text-destructive">*</span>
+                </Label>
                 <Input
-                  id="company"
-                  value={formData.company}
-                  onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                  placeholder="Acme Corp"
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="John Doe"
+                  required
                 />
               </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="company">Company</Label>
+                  <Input
+                    id="company"
+                    value={formData.company}
+                    onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                    placeholder="Acme Corp"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="role">Role</Label>
+                  <Input
+                    id="role"
+                    value={formData.role}
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                    placeholder="CEO"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="john@example.com"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="phone">Phone</Label>
+                  <Input
+                    id="phone"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="+1 234 567 8900"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="location">Location</Label>
+                  <Input
+                    id="location"
+                    value={formData.location}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    placeholder="San Francisco, CA"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="telegram">Telegram Username</Label>
+                  <Input
+                    id="telegram"
+                    value={formData.telegramUsername}
+                    onChange={(e) => setFormData({ ...formData, telegramUsername: e.target.value })}
+                    placeholder="@johndoe"
+                  />
+                </div>
+              </div>
+
               <div className="grid gap-2">
-                <Label htmlFor="role">Role</Label>
+                <Label htmlFor="linkedin">LinkedIn Profile URL</Label>
                 <Input
-                  id="role"
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  placeholder="CEO"
+                  id="linkedin"
+                  type="url"
+                  value={formData.linkedinUrl}
+                  onChange={(e) => setFormData({ ...formData, linkedinUrl: e.target.value })}
+                  placeholder="https://linkedin.com/in/johndoe"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="twitter">Twitter/X Profile URL</Label>
+                <Input
+                  id="twitter"
+                  type="url"
+                  value={formData.twitterUrl}
+                  onChange={(e) => setFormData({ ...formData, twitterUrl: e.target.value })}
+                  placeholder="https://twitter.com/johndoe"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea
+                  id="notes"
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder="Additional notes about this contact..."
+                  rows={3}
                 />
               </div>
             </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="john@example.com"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="phone">Phone</Label>
-                <Input
-                  id="phone"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="+1 234 567 8900"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="location">Location</Label>
-                <Input
-                  id="location"
-                  value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  placeholder="San Francisco, CA"
-                />
-              </div>
-            <div className="grid gap-2">
-              <Label htmlFor="telegram">Telegram Username</Label>
-              <Input
-                id="telegram"
-                value={formData.telegramUsername}
-                onChange={(e) => setFormData({ ...formData, telegramUsername: e.target.value })}
-                placeholder="@johndoe"
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="linkedin">LinkedIn Profile URL</Label>
-            <Input
-              id="linkedin"
-              type="url"
-              value={formData.linkedinUrl}
-              onChange={(e) => setFormData({ ...formData, linkedinUrl: e.target.value })}
-              placeholder="https://linkedin.com/in/johndoe"
-            />
-            <p className="text-xs text-muted-foreground">Used for knowledge graph enrichment</p>
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="twitter">Twitter/X Profile URL</Label>
-            <Input
-              id="twitter"
-              type="url"
-              value={formData.twitterUrl}
-              onChange={(e) => setFormData({ ...formData, twitterUrl: e.target.value })}
-              placeholder="https://twitter.com/johndoe"
-            />
-            <p className="text-xs text-muted-foreground">Used for knowledge graph enrichment</p>
-          </div>
-
-          <div className="grid gap-4">
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea
-                id="notes"
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="Additional notes about this contact..."
-                rows={3}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? "Creating..." : "Create Contact"}
-            </Button>
-          </DialogFooter>
-        </form>
+            <DialogFooter>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setStep("import")}
+              >
+                Back
+              </Button>
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? "Creating..." : "Create Contact"}
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -38,6 +38,14 @@ export const appRouter = router({
         return await searchContacts(input.query);
       }),
     
+    enrichFromLinkedIn: protectedProcedure
+      .input(z.object({ linkedinUrl: z.string() }))
+      .mutation(async ({ input }) => {
+        const { enrichLinkedInProfile } = await import("./enrichment-adapter");
+        const enriched = await enrichLinkedInProfile(input.linkedinUrl);
+        return enriched;
+      }),
+    
     create: protectedProcedure
       .input(z.object({
         name: z.string(),

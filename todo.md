@@ -230,3 +230,47 @@
 - [x] Add "Clear All Filters" button
 - [x] Show active filter badges
 - [x] Update graph visualization based on active filters
+
+
+## Knowledge Graph UI/UX Enhancements
+
+### Visual Improvements
+- [ ] Add color coding by company or relationship strength
+- [ ] Implement node size based on connection count
+- [ ] Add animated transitions for filter changes
+- [ ] Improve node labels with better typography
+- [ ] Add visual indicators for different relationship types
+
+### Interaction Enhancements
+- [ ] Add node selection with details panel
+- [ ] Implement click-to-highlight connected nodes
+- [ ] Add double-click to expand node connections
+- [ ] Show relationship details on edge hover
+- [ ] Add zoom controls and mini-map
+
+### Analytics & Insights
+- [ ] Display network statistics (density, clusters, key connectors)
+- [ ] Show top influencers/most connected nodes
+- [ ] Add relationship strength visualization
+- [ ] Implement community detection/clustering
+- [ ] Show shortest path between two nodes
+
+### Advanced Features
+- [ ] Add graph layout options (force, circular, hierarchical)
+- [ ] Implement graph search with highlighting
+- [ ] Add export to PNG/SVG
+- [ ] Enable node drag and pin functionality
+- [ ] Add time-based graph evolution view
+
+
+## Bug Fixes
+- [x] Fix graphRef.current.refresh is not a function error in Graph.tsx
+
+
+## Contact Creation Flow Redesign
+- [x] Update CreateContactDialog to start with LinkedIn/X URL input
+- [x] Add automatic enrichment on URL submission
+- [x] Show loading state during enrichment
+- [x] Display enriched data for user review/edit
+- [ ] Add X/Twitter profile enrichment service (similar to LinkedIn)
+- [x] Update UI to clearly indicate import-first workflow

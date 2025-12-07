@@ -78,12 +78,8 @@ export default function Graph() {
     }
   }, [graphData, dimensions]);
 
-  // Force canvas refresh when hover state changes
-  useEffect(() => {
-    if (graphRef.current) {
-      graphRef.current.refresh();
-    }
-  }, [hoveredNode]);
+  // Note: ForceGraph2D automatically re-renders when hoveredNode changes
+  // No manual refresh needed
 
   const handleNodeClick = useCallback((node: any) => {
     setLocation(`/contacts/${node.id}`);
