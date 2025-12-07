@@ -299,3 +299,15 @@
 ## Graph Layout Improvements
 - [x] Replace cola layout with fCoSE layout for better node distribution
 - [x] Test fCoSE layout performance and visual quality
+
+
+## Natural Language Query System
+- [x] Design query system architecture (LLM parser + graph search + highlighting)
+- [ ] Create backend tRPC procedure for natural language queries
+- [ ] Implement LLM-based query parser to extract search criteria
+- [x] Build graph search engine (filter by company, role, location, industry, etc.)
+- [x] Add query UI with search bar above graph
+- [x] Implement visual highlighting of matching nodes in graph
+- [ ] Add introduction path finder ("Who can introduce me to X?")
+- [ ] Create query history and saved searches
+- [ ] Add smart suggestions based on query patterns

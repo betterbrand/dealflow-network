@@ -9,9 +9,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
-import { Filter, Maximize2, Minimize2, X } from "lucide-react";
+import { Filter, Maximize2, Minimize2, X, Search } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import CytoscapeComponent from "react-cytoscapejs";
@@ -54,6 +55,8 @@ export default function Graph() {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<string>("all");
   const [selectedRelationType, setSelectedRelationType] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [searchResults, setSearchResults] = useState<string[]>([]);
   
   const cyRef = useRef<cytoscape.Core | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -116,6 +119,56 @@ export default function Graph() {
   }, [graphData, getCompanyColor]);
 
   // Apply filters
+  // Handle search
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+    
+    if (!cyRef.current || !query.trim()) {
+      setSearchResults([]);
+      // Reset highlighting
+      if (cyRef.current) {
+        cyRef.current.nodes().removeClass('highlighted dimmed');
+        cyRef.current.edges().removeClass('highlighted dimmed');
+      }
+      return;
+    }
+
+    const cy = cyRef.current;
+    const lowerQuery = query.toLowerCase();
+    const matchingNodes: string[] = [];
+
+    // Search by name, company, or role
+    cy.nodes().forEach((node) => {
+      const name = (node.data('name') || '').toLowerCase();
+      const company = (node.data('company') || '').toLowerCase();
+      const role = (node.data('role') || '').toLowerCase();
+
+      if (name.includes(lowerQuery) || company.includes(lowerQuery) || role.includes(lowerQuery)) {
+        matchingNodes.push(node.id());
+      }
+    });
+
+    setSearchResults(matchingNodes);
+
+    // Highlight matching nodes
+    if (matchingNodes.length > 0) {
+      cy.nodes().addClass('dimmed');
+      cy.edges().addClass('dimmed');
+
+      matchingNodes.forEach((nodeId) => {
+        const node = cy.getElementById(nodeId);
+        node.removeClass('dimmed').addClass('highlighted');
+        node.connectedEdges().removeClass('dimmed').addClass('highlighted');
+      });
+
+      // Fit to highlighted nodes
+      const highlightedNodes = cy.nodes('.highlighted');
+      if (highlightedNodes.length > 0) {
+        cy.fit(highlightedNodes, 100);
+      }
+    }
+  }, []);
+
   const applyFilters = useCallback(() => {
     if (!cyRef.current) return;
 
@@ -123,6 +176,17 @@ export default function Graph() {
     
     // Show all elements first
     cy.elements().style('display', 'element');
+
+    // Apply search filter
+    if (searchResults.length > 0) {
+      cy.nodes().forEach((node) => {
+        if (!searchResults.includes(node.id())) {
+          node.style('display', 'none');
+          node.connectedEdges().style('display', 'none');
+        }
+      });
+      return; // Don't apply other filters when searching
+    }
 
     // Apply company filter
     if (selectedCompany !== "all") {
@@ -143,7 +207,7 @@ export default function Graph() {
         }
       });
     }
-  }, [selectedCompany, selectedRelationType]);
+  }, [selectedCompany, selectedRelationType, searchResults]);
 
   // Get unique relationship types
   const relationshipTypes = useCallback(() => {
@@ -214,6 +278,36 @@ export default function Graph() {
         width: 3,
         "line-color": "#3b82f6",
         "target-arrow-color": "#3b82f6",
+      },
+    },
+    {
+      selector: "node.highlighted",
+      style: {
+        "border-width": 4,
+        "border-color": "#fbbf24",
+        "border-style": "solid",
+        opacity: 1,
+      },
+    },
+    {
+      selector: "node.dimmed",
+      style: {
+        opacity: 0.3,
+      },
+    },
+    {
+      selector: "edge.highlighted",
+      style: {
+        width: 3,
+        "line-color": "#fbbf24",
+        "target-arrow-color": "#fbbf24",
+        opacity: 1,
+      },
+    },
+    {
+      selector: "edge.dimmed",
+      style: {
+        opacity: 0.2,
       },
     },
   ];
@@ -440,13 +534,39 @@ export default function Graph() {
       <div className="container py-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <div>
+          <div className="flex-1">
             <h1 className="text-3xl font-bold">Knowledge Graph</h1>
             <p className="text-muted-foreground">
               Visualize your network connections
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            {/* Search Bar */}
+            <div className="relative w-64">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search by name, company, or role..."
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+                className="pl-10 pr-10"
+              />
+              {searchQuery && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                  onClick={() => handleSearch("")}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+            {searchResults.length > 0 && (
+              <Badge variant="secondary">
+                {searchResults.length} {searchResults.length === 1 ? 'result' : 'results'}
+              </Badge>
+            )}
             <Button
               variant="outline"
               size="sm"
