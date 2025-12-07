@@ -351,3 +351,13 @@
 - [x] Fix "Invalid response from LLM" error in AI Query feature
 - [x] Add proper error handling and logging for LLM API responses
 - [x] Test with real queries to verify fix
+
+## Query History Feature
+- [x] Create database schema for query history table
+- [x] Add tRPC procedures for saving, retrieving, and deleting query history
+- [x] Build query history sidebar UI component
+- [x] Add click-to-reuse functionality for past queries
+- [x] Add delete functionality for individual history items
+- [x] Automatically save queries when executed
+- [x] Display query timestamp and result count
+- [x] Test query history persistence and retrieval

@@ -168,3 +168,17 @@ export const contactPhotos = mysqlTable("contactPhotos", {
 
 export type ContactPhoto = typeof contactPhotos.$inferSelect;
 export type InsertContactPhoto = typeof contactPhotos.$inferInsert;
+/**
+ * Query history table - stores AI query searches for quick reuse
+ */
+export const queryHistory = mysqlTable("queryHistory", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  query: text("query").notNull(),
+  intent: varchar("intent", { length: 50 }),
+  resultCount: int("resultCount").default(0),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type QueryHistory = typeof queryHistory.$inferSelect;
+export type InsertQueryHistory = typeof queryHistory.$inferInsert;

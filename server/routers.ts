@@ -40,7 +40,7 @@ export const appRouter = router({
     
     aiQuery: protectedProcedure
       .input(z.object({ query: z.string().min(1) }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         console.log('[aiQuery] Received query:', input.query);
         
         try {
@@ -48,6 +48,7 @@ export const appRouter = router({
           const { getDb } = await import("./db");
           const { contacts } = await import("../drizzle/schema");
           const { and, or, like } = await import("drizzle-orm");
+          const { saveQueryHistory } = await import("./db-query-history");
           
           const db = await getDb();
           if (!db) throw new Error("Database not available");
@@ -104,6 +105,14 @@ export const appRouter = router({
           .from(contacts)
           .where(conditions.length > 0 ? and(...conditions) : undefined)
           .limit(50);
+
+          // Save to query history
+          await saveQueryHistory({
+            userId: ctx.user.id,
+            query: input.query,
+            intent: parsed.intent,
+            resultCount: results.length,
+          });
 
           return {
             parsed,
@@ -650,6 +659,25 @@ export const appRouter = router({
         
         return { success: true };
       }),
+  }),
+
+  queryHistory: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const { getQueryHistory } = await import("./db-query-history");
+      return await getQueryHistory(ctx.user.id);
+    }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const { deleteQueryHistory } = await import("./db-query-history");
+        return await deleteQueryHistory(input.id, ctx.user.id);
+      }),
+
+    clear: protectedProcedure.mutation(async ({ ctx }) => {
+      const { clearQueryHistory } = await import("./db-query-history");
+      return await clearQueryHistory(ctx.user.id);
+    }),
   }),
 });
 
