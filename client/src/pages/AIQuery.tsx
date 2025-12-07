@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Send, Sparkles, User, Building2, MapPin, Briefcase, History, X, Clock } from "lucide-react";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
+import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
 
 export default function AIQuery() {
   const [, setLocation] = useLocation();
@@ -14,6 +15,11 @@ export default function AIQuery() {
   const [results, setResults] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(true);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [selectedHistoryIndex, setSelectedHistoryIndex] = useState(-1);
+  const [selectedResultIndex, setSelectedResultIndex] = useState(-1);
+
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const aiQueryMutation = trpc.contacts.aiQuery.useMutation();
   const { data: queryHistory, refetch: refetchHistory } = trpc.queryHistory.list.useQuery();
@@ -67,6 +73,128 @@ export default function AIQuery() {
     "Find all founders",
   ];
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const modKey = isMac ? e.metaKey : e.ctrlKey;
+
+      // Cmd/Ctrl + K: Focus search input
+      if (modKey && e.key === 'k') {
+        e.preventDefault();
+        inputRef.current?.focus();
+        return;
+      }
+
+      // Cmd/Ctrl + Enter: Submit query
+      if (modKey && e.key === 'Enter' && document.activeElement === inputRef.current) {
+        e.preventDefault();
+        handleSubmit(e as any);
+        return;
+      }
+
+      // Escape: Clear input
+      if (e.key === 'Escape' && document.activeElement === inputRef.current) {
+        setQuery("");
+        setResults(null);
+        setSelectedHistoryIndex(-1);
+        setSelectedResultIndex(-1);
+        return;
+      }
+
+      // Cmd/Ctrl + Shift + H: Toggle history sidebar
+      if (modKey && e.shiftKey && e.key === 'H') {
+        e.preventDefault();
+        setShowHistory(!showHistory);
+        return;
+      }
+
+      // Cmd/Ctrl + /: Show shortcuts modal
+      if (modKey && e.key === '/') {
+        e.preventDefault();
+        setShowShortcuts(true);
+        return;
+      }
+
+      // ?: Show shortcuts modal
+      if (e.key === '?' && !modKey && document.activeElement !== inputRef.current) {
+        e.preventDefault();
+        setShowShortcuts(true);
+        return;
+      }
+
+      // 1-5: Select example queries
+      if (['1', '2', '3', '4', '5'].includes(e.key) && document.activeElement !== inputRef.current) {
+        const index = parseInt(e.key) - 1;
+        if (index < exampleQueries.length) {
+          setQuery(exampleQueries[index]);
+          inputRef.current?.focus();
+        }
+        return;
+      }
+
+      // Arrow Up/Down: Navigate history
+      if (queryHistory && queryHistory.length > 0 && showHistory) {
+        if (e.key === 'ArrowUp' && document.activeElement !== inputRef.current) {
+          e.preventDefault();
+          setSelectedHistoryIndex(prev => 
+            prev <= 0 ? queryHistory.length - 1 : prev - 1
+          );
+          return;
+        }
+        if (e.key === 'ArrowDown' && document.activeElement !== inputRef.current) {
+          e.preventDefault();
+          setSelectedHistoryIndex(prev => 
+            prev >= queryHistory.length - 1 ? 0 : prev + 1
+          );
+          return;
+        }
+        // Enter on history item
+        if (e.key === 'Enter' && selectedHistoryIndex >= 0 && document.activeElement !== inputRef.current) {
+          e.preventDefault();
+          handleHistoryClick(queryHistory[selectedHistoryIndex].query);
+          inputRef.current?.focus();
+          setSelectedHistoryIndex(-1);
+          return;
+        }
+        // Delete history item
+        if ((e.key === 'Delete' || e.key === 'Backspace') && selectedHistoryIndex >= 0 && document.activeElement !== inputRef.current) {
+          e.preventDefault();
+          handleDeleteHistory(queryHistory[selectedHistoryIndex].id, e as any);
+          setSelectedHistoryIndex(-1);
+          return;
+        }
+      }
+
+      // J/K: Navigate results
+      if (results && results.results && results.results.length > 0) {
+        if (e.key === 'j' && document.activeElement !== inputRef.current) {
+          e.preventDefault();
+          setSelectedResultIndex(prev => 
+            prev >= results.results.length - 1 ? 0 : prev + 1
+          );
+          return;
+        }
+        if (e.key === 'k' && document.activeElement !== inputRef.current) {
+          e.preventDefault();
+          setSelectedResultIndex(prev => 
+            prev <= 0 ? results.results.length - 1 : prev - 1
+          );
+          return;
+        }
+        // Enter on result
+        if (e.key === 'Enter' && selectedResultIndex >= 0 && document.activeElement !== inputRef.current) {
+          e.preventDefault();
+          setLocation(`/contacts/${results.results[selectedResultIndex].id}`);
+          return;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [query, showHistory, queryHistory, selectedHistoryIndex, results, selectedResultIndex]);
+
   return (
     <div className="flex gap-6 h-full">
       {/* Query History Sidebar */}
@@ -95,7 +223,9 @@ export default function AIQuery() {
                   {queryHistory.map((item) => (
                     <div
                       key={item.id}
-                      className="group p-3 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
+                      className={`group p-3 border rounded-lg hover:bg-accent cursor-pointer transition-colors ${
+                        queryHistory.indexOf(item) === selectedHistoryIndex ? 'bg-accent ring-2 ring-primary' : ''
+                      }`}
                       onClick={() => handleHistoryClick(item.query)}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -166,6 +296,7 @@ export default function AIQuery() {
           <CardContent>
             <form onSubmit={handleSubmit} className="flex gap-2">
               <Input
+                ref={inputRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="e.g., Who do I know at OpenAI?"
@@ -257,10 +388,12 @@ export default function AIQuery() {
                   </p>
                 ) : (
                   <div className="space-y-3">
-                    {results.results.map((contact: any) => (
+                    {results.results.map((contact: any, idx: number) => (
                       <div
                         key={contact.id}
-                        className="flex items-start gap-4 p-4 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
+                        className={`flex items-start gap-4 p-4 border rounded-lg hover:bg-accent cursor-pointer transition-colors ${
+                          idx === selectedResultIndex ? 'bg-accent ring-2 ring-primary' : ''
+                        }`}
                         onClick={() => setLocation(`/contacts/${contact.id}`)}
                       >
                         <div className="flex-shrink-0">
@@ -326,6 +459,12 @@ export default function AIQuery() {
           Show History
         </Button>
       )}
+
+      {/* Keyboard Shortcuts Modal */}
+      <KeyboardShortcutsModal 
+        open={showShortcuts} 
+        onOpenChange={setShowShortcuts} 
+      />
     </div>
   );
 }

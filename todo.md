@@ -366,3 +366,20 @@
 - [x] Fix AI Query page to use DashboardLayout properly
 - [x] Remove duplicate sidebar navigation
 - [x] Ensure query history sidebar works within DashboardLayout
+
+## Keyboard Shortcuts Feature
+- [x] Create KeyboardShortcutsModal component with categorized sections
+- [x] Implement Cmd/Ctrl+K to focus search input
+- [x] Implement Cmd/Ctrl+Enter to submit query
+- [x] Implement Escape to clear input
+- [x] Implement Arrow Up/Down to navigate history
+- [x] Implement Enter on history item to execute query
+- [x] Implement Cmd/Ctrl+Shift+H to toggle history sidebar
+- [x] Implement Delete/Backspace on history item
+- [x] Implement J/K keys to navigate results
+- [x] Implement Enter on result to open contact
+- [x] Implement 1-5 number keys for example queries
+- [x] Implement Cmd/Ctrl+/ and ? to show shortcuts modal
+- [x] Add platform detection for Mac/Windows key display
+- [x] Add visual indicators (ring) for selected items
+- [x] Test all keyboard shortcuts
