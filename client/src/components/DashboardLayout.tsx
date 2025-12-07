@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Building2, LayoutDashboard, LogOut, Network, PanelLeft, Users, Lightbulb } from "lucide-react";
+import { Building2, LayoutDashboard, LogOut, Network, PanelLeft, Users, Lightbulb, Sparkles } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -33,6 +33,7 @@ const menuItems = [
   { icon: Building2, label: "Companies", path: "/companies" },
   { icon: Network, label: "Knowledge Graph", path: "/graph" },
   { icon: Lightbulb, label: "Suggestions", path: "/suggestions" },
+  { icon: Sparkles, label: "AI Query", path: "/ai-query" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";

@@ -38,6 +38,78 @@ export const appRouter = router({
         return await searchContacts(input.query);
       }),
     
+    aiQuery: protectedProcedure
+      .input(z.object({ query: z.string().min(1) }))
+      .mutation(async ({ input }) => {
+        const { parseQuery } = await import("./services/query.service");
+        const { getDb } = await import("./db");
+        const { contacts } = await import("../drizzle/schema");
+        const { and, or, like } = await import("drizzle-orm");
+        
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+
+        // Parse the natural language query
+        const { parsed, explanation } = await parseQuery(input.query);
+
+        // Build SQL filters based on parsed query
+        const conditions: any[] = [];
+
+        if (parsed.filters.companies && parsed.filters.companies.length > 0) {
+          conditions.push(
+            or(
+              ...parsed.filters.companies.map((company) =>
+                like(contacts.company, `%${company}%`)
+              )
+            )
+          );
+        }
+
+        if (parsed.filters.roles && parsed.filters.roles.length > 0) {
+          conditions.push(
+            or(
+              ...parsed.filters.roles.map((role) =>
+                like(contacts.role, `%${role}%`)
+              )
+            )
+          );
+        }
+
+        if (parsed.filters.locations && parsed.filters.locations.length > 0) {
+          conditions.push(
+            or(
+              ...parsed.filters.locations.map((location) =>
+                like(contacts.location, `%${location}%`)
+              )
+            )
+          );
+        }
+
+        if (parsed.filters.names && parsed.filters.names.length > 0) {
+          conditions.push(
+            or(
+              ...parsed.filters.names.map((name) =>
+                like(contacts.name, `%${name}%`)
+              )
+            )
+          );
+        }
+
+        // Execute query
+        const results = await db
+          .select()
+          .from(contacts)
+          .where(conditions.length > 0 ? and(...conditions) : undefined)
+          .limit(50);
+
+        return {
+          parsed,
+          explanation,
+          results,
+          count: results.length,
+        };
+      }),
+    
     enrichFromLinkedIn: protectedProcedure
       .input(z.object({ linkedinUrl: z.string() }))
       .mutation(async ({ input }) => {

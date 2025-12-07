@@ -321,3 +321,28 @@
 - [x] Implement one-click relationship creation from suggestions
 - [x] Add dismiss/ignore functionality for irrelevant suggestions
 - [x] Test suggestion accuracy and relevance
+
+
+## AI-Powered Natural Language Queries
+- [x] Create LLM query parser with structured JSON output schema
+- [x] Build backend tRPC procedure for natural language queries
+- [x] Implement complex search filters (company, role, location, date, etc.)
+- [ ] Add introduction path finder ("Who can introduce me to X?")
+- [ ] Create query UI with chat-style interface
+- [ ] Display query results with visual highlighting in graph
+- [ ] Add query history and saved queries
+- [ ] Implement follow-up question support
+- [ ] Test with complex real-world queries
+
+## AI-Powered Natural Language Queries
+- [x] Create query service with LLM-powered natural language parsing
+- [x] Implement aiQuery tRPC procedure for executing parsed queries
+- [x] Build AI Query page with chat-style interface
+- [x] Add example queries for user guidance
+- [x] Display query explanation and parsed intent
+- [x] Show results with contact cards
+- [x] Add AI Query navigation item to sidebar
+- [x] Write vitest test structure (requires LLM API access to run)
+- [ ] Implement introduction path finding (who can introduce me to X)
+- [ ] Add query history
+- [ ] Add follow-up question suggestions
