@@ -73,7 +73,7 @@ export default function Graph() {
   useEffect(() => {
     if (graphData && graphRef.current) {
       setTimeout(() => {
-        graphRef.current.zoomToFit(400, 50);
+        graphRef.current.zoomToFit(400, 20);
       }, 100);
     }
   }, [graphData, dimensions]);

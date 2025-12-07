@@ -274,3 +274,7 @@
 - [x] Display enriched data for user review/edit
 - [ ] Add X/Twitter profile enrichment service (similar to LinkedIn)
 - [x] Update UI to clearly indicate import-first workflow
+
+
+## Graph Zoom Adjustment
+- [x] Change initial zoom padding from 50 to 20 for wider view
