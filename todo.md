@@ -361,3 +361,8 @@
 - [x] Automatically save queries when executed
 - [x] Display query timestamp and result count
 - [x] Test query history persistence and retrieval
+
+## Bug Fixes - AI Query Layout
+- [x] Fix AI Query page to use DashboardLayout properly
+- [x] Remove duplicate sidebar navigation
+- [x] Ensure query history sidebar works within DashboardLayout
