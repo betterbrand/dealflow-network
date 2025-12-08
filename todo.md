@@ -576,3 +576,7 @@
 - [x] Update magic-link.ts to check database for authorization
 - [x] Test persistence across server restarts
 - [x] Update tests to work with database
+
+## Magic Link Testing
+- [x] Create temporary admin endpoint to generate magic links for testing (console logs not accessible)
+- [x] Test magic link login flow end-to-end

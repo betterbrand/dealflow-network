@@ -1,0 +1,66 @@
+{
+  "query": "SELECT * FROM authorizedUsers",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4Kbgdc4rJNwddMx.root --database XRJ2T4W7Twsw8KZjoKBden --execute SELECT * FROM authorizedUsers",
+  "rows": [
+    {
+      "id": "314",
+      "email": "scott@betterbrand.com",
+      "addedBy": "NULL",
+      "notes": "Initial authorized user",
+      "createdAt": "2025-12-08 00:01:55",
+      "updatedAt": "2025-12-08 00:01:55"
+    },
+    {
+      "id": "315",
+      "email": "brian@discoveryblock.com",
+      "addedBy": "NULL",
+      "notes": "Initial authorized user",
+      "createdAt": "2025-12-08 00:01:55",
+      "updatedAt": "2025-12-08 00:01:55"
+    },
+    {
+      "id": "316",
+      "email": "djohnstonec@gmail.com",
+      "addedBy": "NULL",
+      "notes": "Initial authorized user",
+      "createdAt": "2025-12-08 00:01:55",
+      "updatedAt": "2025-12-08 00:01:55"
+    },
+    {
+      "id": "319",
+      "email": "christopher@alta3x.com",
+      "addedBy": "NULL",
+      "notes": "Initial authorized user",
+      "createdAt": "2025-12-08 00:01:55",
+      "updatedAt": "2025-12-08 00:01:55"
+    },
+    {
+      "id": "320",
+      "email": "test@example.com",
+      "addedBy": "NULL",
+      "notes": "Initial authorized user",
+      "createdAt": "2025-12-08 00:01:55",
+      "updatedAt": "2025-12-08 00:01:55"
+    },
+    {
+      "id": "323",
+      "email": "newuser@example.com",
+      "addedBy": "NULL",
+      "notes": "NULL",
+      "createdAt": "2025-12-08 00:01:55",
+      "updatedAt": "2025-12-08 00:01:55"
+    },
+    {
+      "id": "360",
+      "email": "persistent@example.com",
+      "addedBy": "NULL",
+      "notes": "NULL",
+      "createdAt": "2025-12-08 00:01:55",
+      "updatedAt": "2025-12-08 00:01:55"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\temail\taddedBy\tnotes\tcreatedAt\tupdatedAt\n314\tscott@betterbrand.com\tNULL\tInitial authorized user\t2025-12-08 00:01:55\t2025-12-08 00:01:55\n315\tbrian@discoveryblock.com\tNULL\tInitial authorized user\t2025-12-08 00:01:55\t2025-12-08 00:01:55\n316\tdjohnstonec@gmail.com\tNULL\tInitial authorized user\t2025-12-08 00:01:55\t2025-12-08 00:01:55\n319\tchristopher@alta3x.com\tNULL\tInitial authorized user\t2025-12-08 00:01:55\t2025-12-08 00:01:55\n320\ttest@example.com\tNULL\tInitial authorized user\t2025-12-08 00:01:55\t2025-12-08 00:01:55\n323\tnewuser@example.com\tNULL\tNULL\t2025-12-08 00:01:55\t2025-12-08 00:01:55\n360\tpersistent@example.com\tNULL\tNULL\t2025-12-08 00:01:55\t2025-12-08 00:01:55\n",
+  "stderr": "",
+  "execution_time_ms": 652
+}

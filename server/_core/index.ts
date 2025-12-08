@@ -5,6 +5,7 @@ import net from "net";
 import cookieParser from "cookie-parser";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { magicLinkRouter } from "./magic-link-routes";
+import { devMagicLinkRouter } from "./dev-magic-link";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -37,6 +38,11 @@ async function startServer() {
   app.use(cookieParser());
   // Magic link authentication routes
   app.use("/api/auth/magic-link", magicLinkRouter);
+  
+  // DEV ONLY: Magic link generator for testing
+  if (process.env.NODE_ENV === "development") {
+    app.use("/dev/magic-link", devMagicLinkRouter);
+  }
   
   // Telegram webhook
   const { default: telegramWebhookRouter } = await import("../telegramWebhook");
