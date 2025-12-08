@@ -586,3 +586,9 @@
 - [x] Update magic-link-email.ts to use Resend API
 - [x] Configure sender email domain
 - [x] Test email delivery end-to-end
+
+## Fix Authentication Flow
+- [x] Investigate why Manus OAuth is showing instead of magic link login
+- [x] Update routing to use magic link as primary authentication
+- [x] Remove or disable Manus OAuth redirect
+- [x] Test that magic link login page shows by default
