@@ -43,6 +43,13 @@
       "when": 1765137638019,
       "tag": "0005_curious_mystique",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1765151687923,
+      "tag": "0006_curved_mandarin",
+      "breakpoints": true
     }
   ]
 }

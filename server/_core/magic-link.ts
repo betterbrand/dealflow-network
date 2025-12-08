@@ -1,11 +1,12 @@
 import jwt from "jsonwebtoken";
 import { ENV } from "./env";
+import { isEmailAuthorized, initializeAuthorizedUsers } from "../db-authorized-users";
 
 /**
- * Hardcoded whitelist of authorized users for MVP
- * Add or remove emails here to control access
+ * Default authorized users for initial setup
+ * These will be added to the database on first run if the database is empty
  */
-export const AUTHORIZED_USERS = [
+const DEFAULT_AUTHORIZED_USERS = [
   "scott@betterbrand.com",
   "brian@discoveryblock.com",
   "djohnstonec@gmail.com",
@@ -13,19 +14,26 @@ export const AUTHORIZED_USERS = [
   "test@example.com", // For testing
 ];
 
+// Initialize database with default users on startup
+initializeAuthorizedUsers(DEFAULT_AUTHORIZED_USERS).catch((error) => {
+  console.error("[MagicLink] Failed to initialize authorized users:", error);
+});
+
 /**
  * Check if an email is authorized to access the system
+ * Now checks the database instead of in-memory array
  */
-export function isAuthorizedUser(email: string): boolean {
-  return AUTHORIZED_USERS.includes(email.toLowerCase().trim());
+export async function isAuthorizedUser(email: string): Promise<boolean> {
+  return await isEmailAuthorized(email.toLowerCase().trim());
 }
 
 /**
  * Generate a magic link token for email-based authentication
  * Token expires in 15 minutes
  */
-export function generateMagicLinkToken(email: string): string {
-  if (!isAuthorizedUser(email)) {
+export async function generateMagicLinkToken(email: string): Promise<string> {
+  const isAuthorized = await isAuthorizedUser(email);
+  if (!isAuthorized) {
     throw new Error("Unauthorized email address");
   }
 
@@ -44,7 +52,7 @@ export function generateMagicLinkToken(email: string): string {
 /**
  * Verify a magic link token and return the email if valid
  */
-export function verifyMagicLinkToken(token: string): string | null {
+export async function verifyMagicLinkToken(token: string): Promise<string | null> {
   try {
     const decoded = jwt.verify(token, ENV.cookieSecret) as {
       email: string;
@@ -55,7 +63,8 @@ export function verifyMagicLinkToken(token: string): string | null {
       return null;
     }
 
-    if (!isAuthorizedUser(decoded.email)) {
+    const isAuthorized = await isAuthorizedUser(decoded.email);
+    if (!isAuthorized) {
       return null;
     }
 
@@ -86,7 +95,7 @@ export function generateSessionToken(email: string): string {
 /**
  * Verify a session token and return the email if valid
  */
-export function verifySessionToken(token: string): string | null {
+export async function verifySessionToken(token: string): Promise<string | null> {
   try {
     const decoded = jwt.verify(token, ENV.cookieSecret) as {
       email: string;
@@ -97,7 +106,8 @@ export function verifySessionToken(token: string): string | null {
       return null;
     }
 
-    if (!isAuthorizedUser(decoded.email)) {
+    const isAuthorized = await isAuthorizedUser(decoded.email);
+    if (!isAuthorized) {
       return null;
     }
 

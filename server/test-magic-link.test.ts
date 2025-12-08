@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   generateMagicLinkToken,
   verifyMagicLinkToken,
@@ -6,100 +6,149 @@ import {
   verifySessionToken,
   isAuthorizedUser,
 } from "./_core/magic-link";
+import { getDb } from "./db";
+import { authorizedUsers } from "../drizzle/schema";
 
-describe("Magic Link Authentication", () => {
+describe("Magic Link Authentication (Database-backed)", () => {
+  let testEmail: string;
+
+  // Set up test users in database
+  beforeEach(async () => {
+    testEmail = `test-${Date.now()}@example.com`;
+    const db = await getDb();
+    if (db) {
+      await db.insert(authorizedUsers).values([
+        { email: testEmail, notes: "Test user" },
+      ]);
+    }
+    // Small delay to ensure database operations complete
+    await new Promise(resolve => setTimeout(resolve, 100));
+  });
+
+  afterEach(async () => {
+    const db = await getDb();
+    if (db) {
+      const { eq } = await import("drizzle-orm");
+      await db.delete(authorizedUsers).where(eq(authorizedUsers.email, testEmail));
+    }
+  });
+
   describe("isAuthorizedUser", () => {
-    it("should return true for authorized users", () => {
-      expect(isAuthorizedUser("scott@betterbrand.com")).toBe(true);
-      expect(isAuthorizedUser("test@example.com")).toBe(true);
+    it("should return true for authorized users", async () => {
+      expect(await isAuthorizedUser(testEmail)).toBe(true);
     });
 
-    it("should return false for unauthorized users", () => {
-      expect(isAuthorizedUser("unauthorized@example.com")).toBe(false);
-      expect(isAuthorizedUser("hacker@evil.com")).toBe(false);
+    it("should return false for unauthorized users", async () => {
+      expect(await isAuthorizedUser("unauthorized@example.com")).toBe(false);
+      expect(await isAuthorizedUser("hacker@evil.com")).toBe(false);
     });
 
-    it("should be case-insensitive", () => {
-      expect(isAuthorizedUser("SCOTT@BETTERBRAND.COM")).toBe(true);
-      expect(isAuthorizedUser("Scott@BetterBrand.com")).toBe(true);
+    it("should be case-insensitive", async () => {
+      expect(await isAuthorizedUser(testEmail.toUpperCase())).toBe(true);
     });
 
-    it("should handle whitespace", () => {
-      expect(isAuthorizedUser("  scott@betterbrand.com  ")).toBe(true);
+    it("should handle whitespace", async () => {
+      expect(await isAuthorizedUser(`  ${testEmail}  `)).toBe(true);
     });
   });
 
   describe("Magic Link Tokens", () => {
-    it("should generate and verify valid magic link tokens", () => {
-      const email = "test@example.com";
-      const token = generateMagicLinkToken(email);
+    it("should generate and verify valid magic link tokens", async () => {
+      const token = await generateMagicLinkToken(testEmail);
 
       expect(token).toBeTruthy();
       expect(typeof token).toBe("string");
 
-      const verifiedEmail = verifyMagicLinkToken(token);
-      expect(verifiedEmail).toBe(email);
+      const verifiedEmail = await verifyMagicLinkToken(token);
+      expect(verifiedEmail).toBe(testEmail);
     });
 
-    it("should normalize email in token", () => {
-      const token = generateMagicLinkToken("  TEST@EXAMPLE.COM  ");
-      const verifiedEmail = verifyMagicLinkToken(token);
-      expect(verifiedEmail).toBe("test@example.com");
+    it("should normalize email in token", async () => {
+      const token = await generateMagicLinkToken(`  ${testEmail.toUpperCase()}  `);
+      const verifiedEmail = await verifyMagicLinkToken(token);
+      expect(verifiedEmail).toBe(testEmail);
     });
 
-    it("should reject invalid tokens", () => {
-      expect(verifyMagicLinkToken("invalid-token")).toBeNull();
-      expect(verifyMagicLinkToken("")).toBeNull();
+    it("should reject invalid tokens", async () => {
+      expect(await verifyMagicLinkToken("invalid-token")).toBeNull();
+      expect(await verifyMagicLinkToken("")).toBeNull();
     });
 
-    it("should reject tokens with wrong type", () => {
+    it("should reject tokens with wrong type", async () => {
       // Generate a session token and try to verify as magic link
-      const sessionToken = generateSessionToken("test@example.com");
-      const result = verifyMagicLinkToken(sessionToken);
+      const sessionToken = generateSessionToken(testEmail);
+      const result = await verifyMagicLinkToken(sessionToken);
       expect(result).toBeNull();
+    });
+
+    it("should reject tokens for unauthorized users", async () => {
+      // Temporarily add a user, generate token, then remove them
+      const db = await getDb();
+      if (db) {
+        await db.insert(authorizedUsers).values({ email: "temp@example.com" });
+        const token = await generateMagicLinkToken("temp@example.com");
+        
+        // Remove user from database
+        const { eq } = await import("drizzle-orm");
+        await db.delete(authorizedUsers).where(eq(authorizedUsers.email, "temp@example.com"));
+        
+        // Token should now be invalid
+        const result = await verifyMagicLinkToken(token);
+        expect(result).toBeNull();
+      }
+    });
+
+    it("should throw error when generating token for unauthorized user", async () => {
+      await expect(generateMagicLinkToken("unauthorized@example.com")).rejects.toThrow(
+        "Unauthorized email address"
+      );
     });
   });
 
   describe("Session Tokens", () => {
-    it("should generate and verify valid session tokens", () => {
-      const email = "test@example.com";
-      const token = generateSessionToken(email);
+    it("should generate and verify valid session tokens", async () => {
+      const token = generateSessionToken(testEmail);
 
       expect(token).toBeTruthy();
       expect(typeof token).toBe("string");
 
-      const verifiedEmail = verifySessionToken(token);
-      expect(verifiedEmail).toBe(email);
+      const verifiedEmail = await verifySessionToken(token);
+      expect(verifiedEmail).toBe(testEmail);
     });
 
-    it("should normalize email in session token", () => {
-      const token = generateSessionToken("  TEST@EXAMPLE.COM  ");
-      const verifiedEmail = verifySessionToken(token);
-      expect(verifiedEmail).toBe("test@example.com");
+    it("should normalize email in session token", async () => {
+      const token = generateSessionToken(`  ${testEmail.toUpperCase()}  `);
+      const verifiedEmail = await verifySessionToken(token);
+      expect(verifiedEmail).toBe(testEmail);
     });
 
-    it("should reject invalid session tokens", () => {
-      expect(verifySessionToken("invalid-token")).toBeNull();
-      expect(verifySessionToken("")).toBeNull();
+    it("should reject invalid session tokens", async () => {
+      expect(await verifySessionToken("invalid-token")).toBeNull();
+      expect(await verifySessionToken("")).toBeNull();
     });
 
-    it("should reject tokens with wrong type", () => {
+    it("should reject session tokens with wrong type", async () => {
       // Generate a magic link token and try to verify as session
-      const magicToken = generateMagicLinkToken("test@example.com");
-      const result = verifySessionToken(magicToken);
+      const magicToken = await generateMagicLinkToken(testEmail);
+      const result = await verifySessionToken(magicToken);
       expect(result).toBeNull();
     });
-  });
 
-  describe("Token Expiration", () => {
-    it("should generate tokens that don't immediately expire", () => {
-      const email = "test@example.com";
-      
-      const magicToken = generateMagicLinkToken(email);
-      expect(verifyMagicLinkToken(magicToken)).toBe(email);
-
-      const sessionToken = generateSessionToken(email);
-      expect(verifySessionToken(sessionToken)).toBe(email);
+    it("should reject session tokens for unauthorized users", async () => {
+      // Temporarily add a user, generate token, then remove them
+      const db = await getDb();
+      if (db) {
+        await db.insert(authorizedUsers).values({ email: "temp@example.com" });
+        const token = generateSessionToken("temp@example.com");
+        
+        // Remove user from database
+        const { eq } = await import("drizzle-orm");
+        await db.delete(authorizedUsers).where(eq(authorizedUsers.email, "temp@example.com"));
+        
+        // Token should now be invalid
+        const result = await verifySessionToken(token);
+        expect(result).toBeNull();
+      }
     });
   });
 });

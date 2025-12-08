@@ -237,3 +237,19 @@ export const queryHistory = mysqlTable("queryHistory", {
 
 export type QueryHistory = typeof queryHistory.$inferSelect;
 export type InsertQueryHistory = typeof queryHistory.$inferInsert;
+
+/**
+ * Authorized users table - stores whitelisted email addresses for magic link authentication
+ * Persists authorized users across server restarts
+ */
+export const authorizedUsers = mysqlTable("authorizedUsers", {
+  id: int("id").autoincrement().primaryKey(),
+  email: varchar("email", { length: 320 }).notNull().unique(),
+  addedBy: int("addedBy").references(() => users.id), // Which admin added this user
+  notes: text("notes"), // Optional notes about why this user was added
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AuthorizedUser = typeof authorizedUsers.$inferSelect;
+export type InsertAuthorizedUser = typeof authorizedUsers.$inferInsert;

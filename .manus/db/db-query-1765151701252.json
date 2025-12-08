@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS `authorizedUsers` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `email` varchar(320) NOT NULL UNIQUE,\n  `addedBy` int,\n  `notes` text,\n  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n  CONSTRAINT `authorizedUsers_id` PRIMARY KEY(`id`),\n  CONSTRAINT `authorizedUsers_addedBy_users_id_fk` FOREIGN KEY (`addedBy`) REFERENCES `users`(`id`) ON DELETE SET NULL ON UPDATE NO ACTION\n)",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4Kbgdc4rJNwddMx.root --database XRJ2T4W7Twsw8KZjoKBden --execute CREATE TABLE IF NOT EXISTS `authorizedUsers` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `email` varchar(320) NOT NULL UNIQUE,\n  `addedBy` int,\n  `notes` text,\n  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,\n  CONSTRAINT `authorizedUsers_id` PRIMARY KEY(`id`),\n  CONSTRAINT `authorizedUsers_addedBy_users_id_fk` FOREIGN KEY (`addedBy`) REFERENCES `users`(`id`) ON DELETE SET NULL ON UPDATE NO ACTION\n)",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 438
+}

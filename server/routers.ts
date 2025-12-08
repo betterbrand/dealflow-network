@@ -710,7 +710,7 @@ export const appRouter = router({
     listUsers: protectedProcedure.query(async ({ ctx }) => {
       // Only allow admin users (first user in whitelist is considered admin)
       const { listAuthorizedUsers } = await import("./_core/admin-users");
-      const users = listAuthorizedUsers();
+      const users = await listAuthorizedUsers();
       if (!ctx.user.email || !users.includes(ctx.user.email)) {
         throw new Error("Unauthorized: Admin access required");
       }
@@ -721,18 +721,18 @@ export const appRouter = router({
       .input(z.object({ email: z.string().email() }))
       .mutation(async ({ input, ctx }) => {
         const { listAuthorizedUsers, addAuthorizedUser } = await import("./_core/admin-users");
-        const users = listAuthorizedUsers();
+        const users = await listAuthorizedUsers();
         if (!ctx.user.email || !users.includes(ctx.user.email)) {
           throw new Error("Unauthorized: Admin access required");
         }
-        return addAuthorizedUser(input.email);
+        return await addAuthorizedUser(input.email, ctx.user.id);
       }),
 
     removeUser: protectedProcedure
       .input(z.object({ email: z.string().email() }))
       .mutation(async ({ input, ctx }) => {
         const { listAuthorizedUsers, removeAuthorizedUser } = await import("./_core/admin-users");
-        const users = listAuthorizedUsers();
+        const users = await listAuthorizedUsers();
         if (!ctx.user.email || !users.includes(ctx.user.email)) {
           throw new Error("Unauthorized: Admin access required");
         }

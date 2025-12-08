@@ -20,7 +20,7 @@ export async function getUserFromMagicLink(
     }
 
     // Verify session token
-    const email = verifySessionToken(sessionToken);
+    const email = await verifySessionToken(sessionToken);
 
     if (!email) {
       // Invalid or expired token, clear cookie

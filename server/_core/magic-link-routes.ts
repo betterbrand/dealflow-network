@@ -27,7 +27,8 @@ magicLinkRouter.post("/request", async (req, res) => {
     const normalizedEmail = email.toLowerCase().trim();
 
     // Check if user is authorized
-    if (!isAuthorizedUser(normalizedEmail)) {
+    const isAuthorized = await isAuthorizedUser(normalizedEmail);
+    if (!isAuthorized) {
       // Don't reveal if email is unauthorized for security
       return res.json({
         success: true,
@@ -36,7 +37,7 @@ magicLinkRouter.post("/request", async (req, res) => {
     }
 
     // Generate magic link token
-    const token = generateMagicLinkToken(normalizedEmail);
+    const token = await generateMagicLinkToken(normalizedEmail);
 
     // Build magic link URL
     const baseUrl = req.protocol + "://" + req.get("host");
@@ -72,7 +73,7 @@ magicLinkRouter.get("/verify", async (req, res) => {
     }
 
     // Verify the magic link token
-    const email = verifyMagicLinkToken(token);
+    const email = await verifyMagicLinkToken(token);
 
     if (!email) {
       return res.status(401).send("Invalid or expired magic link");

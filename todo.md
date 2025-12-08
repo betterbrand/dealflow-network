@@ -565,3 +565,14 @@
 - [x] Implement admin-only access control
 - [x] Write comprehensive tests (15/15 passing)
 - [x] Add Admin Users navigation item to sidebar
+
+
+## Persist Authorized Users to Database
+- [x] Create authorizedUsers table in schema
+- [x] Add database migration for new table
+- [x] Create database functions for CRUD operations on authorized users
+- [x] Update admin-users.ts to use database instead of in-memory array
+- [x] Migrate existing whitelist data to database
+- [x] Update magic-link.ts to check database for authorization
+- [x] Test persistence across server restarts
+- [x] Update tests to work with database
