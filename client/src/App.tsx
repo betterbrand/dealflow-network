@@ -14,7 +14,7 @@ import CompanyDetail from "./pages/CompanyDetail";
 import Suggestions from "./pages/Suggestions";
 import AIQuery from "./pages/AIQuery";
 import AdminUsers from "./pages/AdminUsers";
-import Login from "./pages/Login";
+import EmailGateLogin from "./pages/EmailGateLogin";
 import { useAuth } from "./_core/hooks/useAuth";
 
 function Router() {
@@ -29,9 +29,9 @@ function Router() {
     );
   }
 
-  // If not logged in, show login page
+  // If not logged in, show email-gate login (TEMPORARY)
   if (!user) {
-    return <Login />;
+    return <EmailGateLogin />;
   }
 
   // User is logged in, show app routes

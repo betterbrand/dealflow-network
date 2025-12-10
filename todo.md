@@ -592,3 +592,12 @@
 - [x] Update routing to use magic link as primary authentication
 - [x] Remove or disable Manus OAuth redirect
 - [x] Test that magic link login page shows by default
+
+## Temporary Email-Gate Authentication (TEMPORARY WORKAROUND)
+- [x] Create simple email-gate login page (no verification)
+- [x] Update session handling to store email without magic link
+- [x] Bypass authorization whitelist check
+- [x] Update authentication context to use email-gate
+- [x] Test login flow
+- [x] Save checkpoint for publishing
+- [x] NOTE: This is temporary - revert to magic link once publishing is fixed

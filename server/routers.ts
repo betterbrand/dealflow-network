@@ -16,6 +16,31 @@ export const appRouter = router({
         success: true,
       } as const;
     }),
+    // TEMPORARY: Email-gate login (no verification)
+    // This bypasses magic link authentication as a workaround for publishing issues
+    // Will be removed once proper magic link publishing is fixed
+    emailGateLogin: publicProcedure
+      .input(z.object({ email: z.string().email() }))
+      .mutation(async ({ input, ctx }) => {
+        const { upsertUser } = await import("./db");
+        const { generateSessionToken } = await import("./_core/magic-link");
+        
+        // Create/update user with just email (no OAuth)
+        await upsertUser({
+          openId: `email-gate-${input.email}`, // Temporary openId format
+          email: input.email,
+          name: input.email.split('@')[0], // Use email prefix as name
+          loginMethod: "email-gate",
+          lastSignedIn: new Date(),
+        });
+        
+        // Create session token
+        const token = generateSessionToken(input.email);
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, token, cookieOptions);
+        
+        return { success: true };
+      }),
   }),
 
   contacts: router({
