@@ -601,3 +601,9 @@
 - [x] Test login flow
 - [x] Save checkpoint for publishing
 - [x] NOTE: This is temporary - revert to magic link once publishing is fixed
+
+## Push to GitHub
+- [ ] Initialize git repository if needed
+- [ ] Create branch for current state
+- [ ] Push code to GitHub
+- [ ] Verify push successful
