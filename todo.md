@@ -603,7 +603,7 @@
 - [x] NOTE: This is temporary - revert to magic link once publishing is fixed
 
 ## Push to GitHub
-- [ ] Initialize git repository if needed
-- [ ] Create branch for current state
-- [ ] Push code to GitHub
-- [ ] Verify push successful
+- [x] Initialize git repository if needed
+- [x] Create branch for current state (temp-sans-auth)
+- [x] Push code to GitHub
+- [x] Verify push successful
