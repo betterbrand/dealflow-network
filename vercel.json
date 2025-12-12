@@ -2,18 +2,10 @@
   "buildCommand": "pnpm build",
   "outputDirectory": "dist/public",
   "installCommand": "pnpm install",
-  "framework": null,
   "rewrites": [
     {
       "source": "/api/(.*)",
       "destination": "/api/index"
     }
-  ],
-  "functions": {
-    "api/index.js": {
-      "runtime": "nodejs20.x",
-      "maxDuration": 30
-    }
-  },
-  "regions": ["iad1"]
+  ]
 }
