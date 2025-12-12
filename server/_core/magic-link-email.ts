@@ -7,6 +7,20 @@ export async function sendMagicLinkEmail(
   email: string,
   magicLink: string
 ): Promise<boolean> {
+  // Development fallback: Log to console if no Resend API key
+  if (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY === 're_demo_key') {
+    console.log('\n' + '='.repeat(80));
+    console.log('MAGIC LINK EMAIL (Development Mode)');
+    console.log('='.repeat(80));
+    console.log(`To: ${email}`);
+    console.log(`Subject: Your Magic Link to DealFlow Network`);
+    console.log(`\nClick this link to sign in:`);
+    console.log(`\n  ${magicLink}`);
+    console.log(`\nThis link expires in 15 minutes.`);
+    console.log('='.repeat(80) + '\n');
+    return true;
+  }
+
   try {
     // Use Resend API to send email
     const response = await fetch('https://api.resend.com/emails', {
