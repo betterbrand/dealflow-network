@@ -16,7 +16,7 @@ export const magicLinkRouter = Router();
  * POST /api/auth/magic-link/request
  * Request a magic link to be sent to the user's email
  */
-magicLinkRouter.post("/request", async (req, res) => {
+magicLinkRouter.post("/request", async (req: any, res: any) => {
   try {
     const { email } = req.body;
 
@@ -64,7 +64,7 @@ magicLinkRouter.post("/request", async (req, res) => {
  * GET /api/auth/magic-link/verify?token=xxx
  * Verify the magic link token and create a session
  */
-magicLinkRouter.get("/verify", async (req, res) => {
+magicLinkRouter.get("/verify", async (req: any, res: any) => {
   try {
     const { token } = req.query;
 
@@ -106,7 +106,7 @@ magicLinkRouter.get("/verify", async (req, res) => {
  * POST /api/auth/logout
  * Clear the session cookie
  */
-magicLinkRouter.post("/logout", (req, res) => {
+magicLinkRouter.post("/logout", (req: any, res: any) => {
   const cookieOptions = getSessionCookieOptions(req);
   res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
   res.json({ success: true });

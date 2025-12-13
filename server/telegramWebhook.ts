@@ -21,7 +21,7 @@ const pendingCaptures: Map<string, {
  * Webhook endpoint for Telegram bot updates
  * POST /api/telegram/webhook
  */
-telegramWebhookRouter.post("/webhook", async (req, res) => {
+telegramWebhookRouter.post("/webhook", async (req: any, res: any) => {
   try {
     const update: TelegramUpdate = req.body;
     
@@ -146,7 +146,7 @@ telegramWebhookRouter.post("/webhook", async (req, res) => {
 /**
  * Health check endpoint
  */
-telegramWebhookRouter.get("/health", (req, res) => {
+telegramWebhookRouter.get("/health", (req: any, res: any) => {
   res.json({ status: "ok", service: "telegram-webhook" });
 });
 

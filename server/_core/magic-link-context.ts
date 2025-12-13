@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import type { Request, Response } from "express";
 import { COOKIE_NAME } from "@shared/const";
 import { verifySessionToken } from "./magic-link";
 import { getUserByOpenId } from "../db";
