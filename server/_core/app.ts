@@ -36,7 +36,7 @@ export function createApp() {
   );
   
   // Health check endpoint
-  app.get("/api/health", (req, res) => {
+  app.get("/api/health", (req: any, res: any) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
   
