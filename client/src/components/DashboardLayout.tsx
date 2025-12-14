@@ -253,6 +253,7 @@ function DashboardLayoutContent({
                 </div>
               </div>
               <Button
+                type="button"
                 onClick={logout}
                 variant="outline"
                 size="sm"
