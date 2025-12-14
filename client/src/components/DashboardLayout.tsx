@@ -252,20 +252,14 @@ function DashboardLayoutContent({
                   </p>
                 </div>
               </div>
-              <Button
+              <button
                 type="button"
                 onClick={logout}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  logout();
-                }}
-                variant="outline"
-                size="sm"
-                className="w-full justify-start gap-2 text-muted-foreground hover:text-destructive hover:border-destructive/50 group-data-[collapsible=icon]:justify-center"
+                className="inline-flex items-center justify-start gap-2 w-full h-8 px-3 rounded-md text-sm font-medium transition-colors border border-input bg-transparent shadow-xs hover:bg-accent hover:text-destructive hover:border-destructive/50 text-muted-foreground group-data-[collapsible=icon]:justify-center"
               >
                 <LogOut className="h-4 w-4" />
                 <span className="group-data-[collapsible=icon]:hidden">Sign out</span>
-              </Button>
+              </button>
             </div>
           </SidebarFooter>
         </Sidebar>
