@@ -118,6 +118,7 @@ function DashboardLayoutContent({
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
@@ -229,8 +230,11 @@ function DashboardLayoutContent({
           </SidebarContent>
 
           <SidebarFooter className="p-3">
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3 px-1 py-1">
+            <div className="relative">
+              <div 
+                className="flex items-center gap-3 px-1 py-1 rounded-md hover:bg-accent transition-colors cursor-pointer"
+                onClick={() => setShowUserMenu(!showUserMenu)}
+              >
                 <Avatar className="h-9 w-9 border shrink-0">
                   <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
                     {user?.name?.charAt(0).toUpperCase()}
@@ -245,17 +249,24 @@ function DashboardLayoutContent({
                   </p>
                 </div>
               </div>
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  logout();
-                }}
-                className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground group-data-[collapsible=icon]:justify-center"
-              >
-                <LogOut className="h-4 w-4" />
-                <span className="group-data-[collapsible=icon]:hidden">Sign out</span>
-              </a>
+              {/* Click-triggered menu */}
+              {showUserMenu && (
+                <div className="absolute bottom-full left-0 mb-2 w-56 bg-popover border border-border rounded-md shadow-md z-50">
+                  <div className="p-2">
+                    <a
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        logout();
+                      }}
+                      className="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded-sm hover:bg-accent transition-colors"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span>Sign out</span>
+                    </a>
+                  </div>
+                </div>
+              )}
             </div>
           </SidebarFooter>
         </Sidebar>
