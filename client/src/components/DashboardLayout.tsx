@@ -1,11 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -234,38 +229,36 @@ function DashboardLayoutContent({
           </SidebarContent>
 
           <SidebarFooter className="p-3">
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className="flex items-center gap-3 px-1 py-1 w-full rounded-md hover:bg-accent transition-colors cursor-pointer"
-                >
-                  <Avatar className="h-9 w-9 border shrink-0">
-                    <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
-                      {user?.name?.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0 text-left group-data-[collapsible=icon]:hidden">
-                    <p className="text-sm font-medium truncate leading-none">
-                      {user?.name || "-"}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate mt-1.5">
-                      {user?.email || "-"}
-                    </p>
-                  </div>
-                </button>
-              </PopoverTrigger>
-              <PopoverContent side="top" align="start" className="w-56 p-2">
-                <button
-                  type="button"
-                  onClick={logout}
-                  className="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded-sm hover:bg-accent transition-colors text-left"
-                >
-                  <LogOut className="h-4 w-4" />
-                  <span>Sign out</span>
-                </button>
-              </PopoverContent>
-            </Popover>
+            <div className="relative group">
+              <div className="flex items-center gap-3 px-1 py-1 rounded-md hover:bg-accent transition-colors cursor-pointer">
+                <Avatar className="h-9 w-9 border shrink-0">
+                  <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
+                    {user?.name?.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
+                  <p className="text-sm font-medium truncate leading-none">
+                    {user?.name || "-"}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate mt-1.5">
+                    {user?.email || "-"}
+                  </p>
+                </div>
+              </div>
+              {/* Hover menu */}
+              <div className="absolute bottom-full left-0 mb-2 w-56 bg-popover border border-border rounded-md shadow-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                <div className="p-2">
+                  <button
+                    type="button"
+                    onClick={logout}
+                    className="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded-sm hover:bg-accent transition-colors text-left"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>Sign out</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </SidebarFooter>
         </Sidebar>
         <div
