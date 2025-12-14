@@ -8,6 +8,17 @@ import App from "./App";
 import { getLoginUrl } from "./const";
 import "./index.css";
 
+// Set page title and favicon from environment variables
+document.title = import.meta.env.VITE_APP_TITLE || 'DealFlow Network';
+const favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement;
+if (favicon && import.meta.env.VITE_APP_LOGO) {
+  favicon.href = import.meta.env.VITE_APP_LOGO;
+}
+const appleTouchIcon = document.querySelector('link[rel="apple-touch-icon"]') as HTMLLinkElement;
+if (appleTouchIcon && import.meta.env.VITE_APP_LOGO) {
+  appleTouchIcon.href = import.meta.env.VITE_APP_LOGO;
+}
+
 const queryClient = new QueryClient();
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
