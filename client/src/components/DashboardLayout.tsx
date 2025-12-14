@@ -255,6 +255,10 @@ function DashboardLayoutContent({
               <Button
                 type="button"
                 onClick={logout}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  logout();
+                }}
                 variant="outline"
                 size="sm"
                 className="w-full justify-start gap-2 text-muted-foreground hover:text-destructive hover:border-destructive/50 group-data-[collapsible=icon]:justify-center"
