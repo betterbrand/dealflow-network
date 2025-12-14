@@ -246,7 +246,7 @@ function DashboardLayoutContent({
                 </div>
               </div>
               {/* Hover menu */}
-              <div className="absolute bottom-full left-0 mb-2 w-56 bg-popover border border-border rounded-md shadow-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+              <div className="absolute bottom-full left-0 mb-2 w-56 bg-popover border border-border rounded-md shadow-md opacity-0 invisible group-hover:opacity-100 group-hover:visible hover:opacity-100 hover:visible transition-all duration-200 z-50">
                 <div className="p-2">
                   <button
                     type="button"
