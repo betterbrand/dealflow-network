@@ -1,11 +1,10 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Sidebar,
   SidebarContent,
@@ -25,7 +24,6 @@ import { Building2, LayoutDashboard, LogOut, Network, PanelLeft, Users, Lightbul
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
-import { Button } from "./ui/button";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
@@ -236,31 +234,38 @@ function DashboardLayoutContent({
           </SidebarContent>
 
           <SidebarFooter className="p-3">
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3 px-1 py-1">
-                <Avatar className="h-9 w-9 border shrink-0">
-                  <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
-                    {user?.name?.charAt(0).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
-                  <p className="text-sm font-medium truncate leading-none">
-                    {user?.name || "-"}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate mt-1.5">
-                    {user?.email || "-"}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={logout}
-                className="inline-flex items-center justify-start gap-2 w-full h-8 px-3 rounded-md text-sm font-medium transition-colors border border-input bg-transparent shadow-xs hover:bg-accent hover:text-destructive hover:border-destructive/50 text-muted-foreground group-data-[collapsible=icon]:justify-center"
-              >
-                <LogOut className="h-4 w-4" />
-                <span className="group-data-[collapsible=icon]:hidden">Sign out</span>
-              </button>
-            </div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-3 px-1 py-1 w-full rounded-md hover:bg-accent transition-colors cursor-pointer"
+                >
+                  <Avatar className="h-9 w-9 border shrink-0">
+                    <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
+                      {user?.name?.charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0 text-left group-data-[collapsible=icon]:hidden">
+                    <p className="text-sm font-medium truncate leading-none">
+                      {user?.name || "-"}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate mt-1.5">
+                      {user?.email || "-"}
+                    </p>
+                  </div>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="start" className="w-56 p-2">
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded-sm hover:bg-accent transition-colors text-left"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>Sign out</span>
+                </button>
+              </PopoverContent>
+            </Popover>
           </SidebarFooter>
         </Sidebar>
         <div
