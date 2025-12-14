@@ -235,29 +235,33 @@ function DashboardLayoutContent({
             </SidebarMenu>
           </SidebarContent>
 
-          <SidebarFooter className="p-3 space-y-2">
-            <div className="flex items-center gap-3 rounded-lg px-1 py-1 w-full group-data-[collapsible=icon]:justify-center">
-              <Avatar className="h-9 w-9 border shrink-0">
-                <AvatarFallback className="text-xs font-medium">
-                  {user?.name?.charAt(0).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
-                <p className="text-sm font-medium truncate leading-none">
-                  {user?.name || "-"}
-                </p>
-                <p className="text-xs text-muted-foreground truncate mt-1.5">
-                  {user?.email || "-"}
-                </p>
+          <SidebarFooter className="p-3">
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3 px-1 py-1">
+                <Avatar className="h-9 w-9 border shrink-0">
+                  <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
+                    {user?.name?.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
+                  <p className="text-sm font-medium truncate leading-none">
+                    {user?.name || "-"}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate mt-1.5">
+                    {user?.email || "-"}
+                  </p>
+                </div>
               </div>
+              <Button
+                onClick={logout}
+                variant="outline"
+                size="sm"
+                className="w-full justify-start gap-2 text-muted-foreground hover:text-destructive hover:border-destructive/50 group-data-[collapsible=icon]:justify-center"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="group-data-[collapsible=icon]:hidden">Sign out</span>
+              </Button>
             </div>
-            <button
-              onClick={logout}
-              className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-destructive/10 text-destructive transition-colors w-full text-left text-sm group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <LogOut className="h-4 w-4 shrink-0" />
-              <span className="group-data-[collapsible=icon]:hidden">Sign out</span>
-            </button>
           </SidebarFooter>
         </Sidebar>
         <div
