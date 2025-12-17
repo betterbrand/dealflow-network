@@ -1,5 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import {
   Sidebar,
   SidebarContent,
@@ -120,6 +121,7 @@ function DashboardLayoutContent({
   const [isResizing, setIsResizing] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
 
@@ -128,6 +130,20 @@ function DashboardLayoutContent({
       setIsResizing(false);
     }
   }, [isCollapsed]);
+
+  // Close user menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setShowUserMenu(false);
+      }
+    };
+
+    if (showUserMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showUserMenu]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -230,8 +246,8 @@ function DashboardLayoutContent({
           </SidebarContent>
 
           <SidebarFooter className="p-3">
-            <div className="relative">
-              <div 
+            <div className="relative" ref={userMenuRef}>
+              <div
                 className="flex items-center gap-3 px-1 py-1 rounded-md hover:bg-accent transition-colors cursor-pointer"
                 onClick={() => setShowUserMenu(!showUserMenu)}
               >
@@ -253,17 +269,18 @@ function DashboardLayoutContent({
               {showUserMenu && (
                 <div className="absolute bottom-full left-0 mb-2 w-56 bg-popover border border-border rounded-md shadow-md z-50">
                   <div className="p-2">
-                    <a
-                      href="#"
+                    <button
+                      type="button"
                       onClick={(e) => {
                         e.preventDefault();
+                        setShowUserMenu(false);
                         logout();
                       }}
                       className="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded-sm hover:bg-accent transition-colors"
                     >
                       <LogOut className="h-4 w-4" />
                       <span>Sign out</span>
-                    </a>
+                    </button>
                   </div>
                 </div>
               )}
