@@ -1,5 +1,4 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { SimpleCollapsibleNav } from './SimpleCollapsibleNav';
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
 import { Button } from "@/components/ui/button";

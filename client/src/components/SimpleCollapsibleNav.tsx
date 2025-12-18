@@ -27,7 +27,7 @@ export function SimpleCollapsibleNav() {
   return (
     <nav
       className={cn(
-        "flex h-screen flex-col border-r bg-sidebar transition-[width] duration-200",
+        "flex h-screen flex-col border-r bg-sidebar",
         isCollapsed ? "w-16" : "w-64"
       )}
     >
@@ -64,9 +64,8 @@ export function SimpleCollapsibleNav() {
               key={item.path}
               onClick={() => setLocation(item.path)}
               className={cn(
-                "flex w-full items-center gap-2 rounded-md p-2 text-sm transition-colors",
+                "flex w-full items-center gap-2 rounded-md p-2 text-sm",
                 isActive && "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
-                !isActive && "hover:bg-sidebar-accent/50",
                 isCollapsed && "justify-center"
               )}
               title={isCollapsed ? item.label : undefined}
