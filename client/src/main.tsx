@@ -19,7 +19,16 @@ if (appleTouchIcon && import.meta.env.VITE_APP_LOGO) {
   appleTouchIcon.href = import.meta.env.VITE_APP_LOGO;
 }
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1, // Only retry once instead of 3 times
+      refetchOnWindowFocus: false, // Don't refetch on window focus
+      refetchOnReconnect: false, // Don't refetch on reconnect
+      staleTime: 30000, // Consider data fresh for 30 seconds
+    },
+  },
+});
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
