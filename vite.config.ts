@@ -1,15 +1,12 @@
-import { jsxLocPlugin } from "@builder.io/vite-plugin-jsx-loc";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import path from "path";
 import { defineConfig } from "vite";
-import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
 
-
-// Disabled plugins that cause UI issues in development:
-// - vitePluginManusRuntime: was creating overlay blocking clicks
-// - jsxLocPlugin: was causing flicker on hover
+// Removed problematic vite plugins:
+// - vite-plugin-manus-runtime: was creating overlay blocking clicks
+// - @builder.io/vite-plugin-jsx-loc: was causing flicker on hover
 const plugins = [react(), tailwindcss()];
 
 export default defineConfig({
