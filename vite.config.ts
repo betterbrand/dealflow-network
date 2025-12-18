@@ -7,7 +7,10 @@ import { defineConfig } from "vite";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
 
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime()];
+// Disabled plugins that cause UI issues in development:
+// - vitePluginManusRuntime: was creating overlay blocking clicks
+// - jsxLocPlugin: was causing flicker on hover
+const plugins = [react(), tailwindcss()];
 
 export default defineConfig({
   plugins,
