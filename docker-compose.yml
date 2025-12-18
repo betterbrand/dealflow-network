@@ -1,0 +1,44 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount source directories for hot reload
+      - ./client:/app/client
+      - ./server:/app/server
+      - ./shared:/app/shared
+      - ./drizzle:/app/drizzle
+
+      # Mount configuration files
+      - ./package.json:/app/package.json
+      - ./tsconfig.json:/app/tsconfig.json
+      - ./vite.config.ts:/app/vite.config.ts
+      - ./vitest.config.ts:/app/vitest.config.ts
+      - ./drizzle.config.ts:/app/drizzle.config.ts
+
+      # Use named volume for node_modules to avoid conflicts
+      # between host and container node_modules
+      - node_modules:/app/node_modules
+
+    env_file:
+      - .env
+
+    environment:
+      - NODE_ENV=development
+      # Allow connections from any host (needed for Docker)
+      - HOST=0.0.0.0
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Use stdin_open and tty for interactive debugging if needed
+    stdin_open: true
+    tty: true
+
+volumes:
+  # Named volume for node_modules
+  # This persists across container restarts and avoids host/container conflicts
+  node_modules:

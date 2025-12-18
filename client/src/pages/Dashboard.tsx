@@ -5,9 +5,25 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
-  const { data: contacts, isLoading: contactsLoading } = trpc.contacts.list.useQuery();
-  const { data: companies } = trpc.companies.list.useQuery();
-  const { data: events } = trpc.events.list.useQuery();
+  const { data: contacts, isLoading: contactsLoading } = trpc.contacts.list.useQuery(undefined, {
+    staleTime: 30000, // Cache for 30 seconds
+  });
+  const { data: companies, isLoading: companiesLoading } = trpc.companies.list.useQuery(undefined, {
+    staleTime: 30000,
+  });
+  const { data: events, isLoading: eventsLoading } = trpc.events.list.useQuery(undefined, {
+    staleTime: 30000,
+  });
+
+  const isLoading = contactsLoading || companiesLoading || eventsLoading;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   const stats = [
     {
