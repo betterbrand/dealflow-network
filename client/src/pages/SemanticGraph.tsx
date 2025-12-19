@@ -2,10 +2,12 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
-import { Maximize2, Minimize2, RefreshCw } from "lucide-react";
+import { Maximize2, Minimize2, RefreshCw, Plus } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import CytoscapeComponent from "react-cytoscapejs";
 import cytoscape from "cytoscape";
 import fcose from "cytoscape-fcose";
@@ -40,6 +42,8 @@ interface GraphEdge {
 export default function SemanticGraph() {
   const { user, loading: authLoading } = useAuth();
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [linkedinUrl, setLinkedinUrl] = useState("");
+  const [showEnrichForm, setShowEnrichForm] = useState(false);
   const cyRef = useRef<cytoscape.Core | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
@@ -53,6 +57,26 @@ export default function SemanticGraph() {
     undefined,
     { enabled: !!user }
   );
+
+  const enrichMutation = trpc.contacts.enrichFromLinkedIn.useMutation({
+    onSuccess: () => {
+      toast.success("Profile enriched successfully!");
+      setLinkedinUrl("");
+      setShowEnrichForm(false);
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(`Enrichment failed: ${error.message}`);
+    },
+  });
+
+  const handleEnrich = () => {
+    if (!linkedinUrl.trim()) {
+      toast.error("Please enter a LinkedIn URL");
+      return;
+    }
+    enrichMutation.mutate({ linkedinUrl });
+  };
 
   // Transform RDF entities to Cytoscape format
   const cytoscapeElements = useCallback(() => {
@@ -360,6 +384,14 @@ export default function SemanticGraph() {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setShowEnrichForm(!showEnrichForm)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Enrich Profile
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => refetch()}
             >
               <RefreshCw className="h-4 w-4 mr-2" />
@@ -378,6 +410,33 @@ export default function SemanticGraph() {
             </Button>
           </div>
         </div>
+
+        {/* Enrich Form */}
+        {showEnrichForm && (
+          <Card className="mb-6">
+            <CardContent className="pt-6">
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  placeholder="https://www.linkedin.com/in/username"
+                  value={linkedinUrl}
+                  onChange={(e) => setLinkedinUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleEnrich()}
+                  disabled={enrichMutation.isPending}
+                />
+                <Button
+                  onClick={handleEnrich}
+                  disabled={enrichMutation.isPending}
+                >
+                  {enrichMutation.isPending ? "Enriching..." : "Enrich"}
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground mt-2">
+                Paste a LinkedIn profile URL to enrich and add to the knowledge graph
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Graph */}
         <Card>
@@ -399,13 +458,20 @@ export default function SemanticGraph() {
                 />
               ) : (
                 <div className="flex items-center justify-center h-full">
-                  <div className="text-center">
-                    <p className="text-muted-foreground mb-4">
+                  <div className="text-center max-w-md">
+                    <h3 className="text-lg font-semibold mb-2">
                       No entities in the semantic graph yet
+                    </h3>
+                    <p className="text-muted-foreground mb-4">
+                      Click "Enrich Profile" above to add LinkedIn profiles to the knowledge graph
                     </p>
-                    <p className="text-sm text-muted-foreground">
-                      Enrich a LinkedIn profile to populate the RDF store
-                    </p>
+                    <Button
+                      onClick={() => setShowEnrichForm(true)}
+                      variant="default"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Your First Profile
+                    </Button>
                   </div>
                 </div>
               )}
