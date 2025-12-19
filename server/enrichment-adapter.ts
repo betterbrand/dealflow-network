@@ -1,42 +1,24 @@
 /**
- * ENRICHMENT ADAPTER - Abstracts data source for LinkedIn/Twitter enrichment
- * 
- * This adapter provides a clean interface for enriching contact profiles
- * and allows switching between different data sources without changing
- * dependent code.
- * 
- * WEB MVP (Current):
- * - Uses Manus LinkedIn API (serverless-compatible)
- * - Transforms data to semantic format
- * - Works in Vercel/Manus serverless environment
- * 
- * ELECTRON VERSION (Future):
- * - Uses pure ASIMOV + Bright Data
- * - Bundles Rust binaries with the app
- * - Fully offline operation
- * - Switch by setting USE_PURE_ASIMOV = true
- * 
- * WHY TWO IMPLEMENTATIONS:
- * - Serverless functions can't run Rust binaries
- * - Electron can bundle native binaries
- * - Same interface, different backends
- * 
- * HOW TO SWITCH (for Electron):
- * 1. Bundle ASIMOV Rust binaries with Electron app
- * 2. Set USE_PURE_ASIMOV = true below
- * 3. Test with: `npm test -- test-asimov-brightdata`
- * 
- * @see server/test-asimov-brightdata.ts for the test
- * @see todo.md for Electron migration plan
+ * ENRICHMENT ADAPTER - LinkedIn Enrichment Module
+ *
+ * Phase 1: Uses Bright Data API + TypeScript semantic transformer
+ * - Fetches LinkedIn profile data via Bright Data Scrapers API
+ * - Transforms to Schema.org + PROV-O JSON-LD semantic graph
+ * - Extensible for future data sources (Twitter, Telegram, etc.)
+ *
+ * Phase 3: Will add ASIMOV validation layer
+ * - ASIMOV binary for neurosymbolic validation
+ * - Cryptographic provenance
+ * - Enhanced semantic reasoning
  */
 
-import { exec } from "child_process";
-import { promisify } from "util";
-
-const execAsync = promisify(exec);
-
-// Using ASIMOV + Bright Data for LinkedIn enrichment
-const USE_PURE_ASIMOV = true;
+import { fetchLinkedInProfile } from "./_core/brightdata";
+import {
+  transformLinkedInToSemanticGraph,
+  parseSemanticGraph,
+  type SemanticGraph,
+  type TransformOptions,
+} from "./_core/semantic-transformer";
 
 export interface EnrichedProfile {
   name: string;
@@ -61,74 +43,87 @@ export interface EnrichedProfile {
   connections?: number;
   profilePictureUrl?: string;
   // RDF/JSON-LD semantic graph
-  semanticGraph?: any;
+  semanticGraph?: SemanticGraph;
+}
+
+export interface EnrichmentOptions {
+  userId?: number;
+  eventId?: string;
+  timestamp?: Date;
 }
 
 /**
- * Enrich a LinkedIn profile using ASIMOV + Bright Data semantic processing.
+ * Enrich a LinkedIn profile using Bright Data API + Semantic Transformer
  *
- * This function uses ASIMOV to process LinkedIn data from Bright Data
- * and returns semantic RDF/JSON-LD output.
+ * Phase 1: Direct Bright Data integration
+ * - Fetches profile data from LinkedIn via Bright Data
+ * - Transforms to Schema.org + PROV-O JSON-LD
+ * - Tracks provenance (WHO, WHEN, FROM which source)
+ *
+ * @param profileUrl - LinkedIn profile URL (e.g., https://www.linkedin.com/in/username)
+ * @param options - Enrichment options (userId, eventId, timestamp)
+ * @returns Enriched profile with semantic graph
  */
 export async function enrichLinkedInProfile(
-  profileUrl: string
+  profileUrl: string,
+  options: EnrichmentOptions = {}
 ): Promise<EnrichedProfile> {
-  return enrichViaASIMOVBrightData(profileUrl);
+  console.log("[Enrichment] Fetching LinkedIn profile from Bright Data:", profileUrl);
+
+  try {
+    // Fetch profile data from Bright Data API
+    const profile = await fetchLinkedInProfile(profileUrl);
+
+    // Transform to semantic graph
+    const transformOptions: TransformOptions = {
+      source: "LinkedIn",
+      userId: options.userId,
+      eventId: options.eventId?.toString(),
+      timestamp: options.timestamp,
+    };
+
+    const semanticGraph = transformLinkedInToSemanticGraph(
+      profile,
+      profileUrl,
+      transformOptions
+    );
+
+    // Parse semantic graph for structured data
+    const parsed = parseSemanticGraph(semanticGraph);
+
+    console.log("[Enrichment] Successfully enriched LinkedIn profile:", profile.name);
+
+    return {
+      name: profile.name || "",
+      headline: profile.headline,
+      location: profile.location,
+      summary: profile.summary,
+      experience: profile.experience,
+      education: profile.education,
+      skills: profile.skills,
+      connections: profile.connections,
+      profilePictureUrl: profile.profilePictureUrl,
+      semanticGraph,
+    };
+  } catch (error) {
+    console.error("[Enrichment] Failed to enrich LinkedIn profile:", error);
+    throw new Error(
+      `LinkedIn enrichment failed: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
+  }
 }
 
 /**
- * TARGET IMPLEMENTATION: Pure ASIMOV + Bright Data
- * 
- * This is what we WANT to use, but it currently returns a 500 error.
- */
-async function enrichViaASIMOVBrightData(
-  profileUrl: string
-): Promise<EnrichedProfile> {
-  console.log("[Enrichment] Using pure ASIMOV + Bright Data");
-  
-  // Call ASIMOV brightdata importer to get semantic RDF/JSON-LD
-  const { stdout } = await execAsync(
-    `source $HOME/.cargo/env && asimov-brightdata-importer "${profileUrl}"`,
-    { env: { ...process.env, BRIGHTDATA_API_KEY: process.env.BRIGHTDATA_API_KEY } }
-  );
-
-  const semanticGraph = JSON.parse(stdout);
-  
-  // Extract structured data from the semantic graph
-  return parseSemanticGraph(semanticGraph);
-}
-
-
-/**
- * Parse ASIMOV's RDF/JSON-LD semantic graph into our structured format
- */
-function parseSemanticGraph(semanticGraph: any): EnrichedProfile {
-  // TODO: Implement proper RDF/JSON-LD parsing
-  // This should extract Person, Organization, Role entities from the graph
-  
-  return {
-    name: semanticGraph["@graph"]?.[0]?.name || "",
-    semanticGraph,
-  };
-}
-
-/**
- * Enrich a Twitter/X profile using ASIMOV semantic processing.
- * 
- * Similar to LinkedIn, but for Twitter/X profiles.
+ * Enrich a Twitter/X profile
+ *
+ * Phase 2: Will implement Twitter API integration
+ * Currently not implemented - placeholder for future
  */
 export async function enrichTwitterProfile(
-  profileUrl: string
+  profileUrl: string,
+  options: EnrichmentOptions = {}
 ): Promise<EnrichedProfile> {
-  if (USE_PURE_ASIMOV) {
-    // Call ASIMOV brightdata importer for Twitter
-    const { stdout } = await execAsync(
-      `source $HOME/.cargo/env && asimov-brightdata-importer "${profileUrl}"`,
-      { env: { ...process.env, BRIGHTDATA_API_KEY: process.env.BRIGHTDATA_API_KEY } }
-    );
-    return parseSemanticGraph(JSON.parse(stdout));
-  } else {
-    // TODO: Implement Manus Twitter API fallback
-    throw new Error("Twitter enrichment not yet implemented");
-  }
+  throw new Error(
+    "Twitter enrichment not yet implemented. Coming in Phase 2."
+  );
 }
