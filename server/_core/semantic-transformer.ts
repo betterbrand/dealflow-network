@@ -116,28 +116,32 @@ export function transformLinkedInToSemanticGraph(
 
   // Add work experience as worksFor relationships
   if (profile.experience && profile.experience.length > 0) {
-    person.worksFor = profile.experience.map((exp, index) => ({
-      "@type": "Organization" as const,
-      "@id": `org:${exp.company.toLowerCase().replace(/\s+/g, "-")}-${index}`,
-      name: exp.company,
-      jobTitle: exp.title,
-      startDate: exp.startDate,
-      endDate: exp.endDate,
-      description: exp.description,
-    }));
+    person.worksFor = profile.experience
+      .filter(exp => exp.company) // Only include if company name exists
+      .map((exp, index) => ({
+        "@type": "Organization" as const,
+        "@id": `org:${exp.company.toLowerCase().replace(/\s+/g, "-")}-${index}`,
+        name: exp.company,
+        jobTitle: exp.title,
+        startDate: exp.startDate,
+        endDate: exp.endDate,
+        description: exp.description,
+      }));
   }
 
   // Add education as alumniOf relationships
   if (profile.education && profile.education.length > 0) {
-    person.alumniOf = profile.education.map((edu, index) => ({
-      "@type": "EducationalOrganization" as const,
-      "@id": `edu:${edu.school.toLowerCase().replace(/\s+/g, "-")}-${index}`,
-      name: edu.school,
-      degree: edu.degree,
-      field: edu.field,
-      startDate: edu.startDate,
-      endDate: edu.endDate,
-    }));
+    person.alumniOf = profile.education
+      .filter(edu => edu.school) // Only include if school name exists
+      .map((edu, index) => ({
+        "@type": "EducationalOrganization" as const,
+        "@id": `edu:${edu.school.toLowerCase().replace(/\s+/g, "-")}-${index}`,
+        name: edu.school,
+        degree: edu.degree,
+        field: edu.field,
+        startDate: edu.startDate,
+        endDate: edu.endDate,
+      }));
   }
 
   // Add event attendance if provided

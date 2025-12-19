@@ -116,6 +116,7 @@ async function pollForResults(snapshotId: string, apiKey: string): Promise<any> 
         // Check if we have actual results (array)
         if (Array.isArray(data) && data.length > 0) {
           console.log(`[Bright Data] ✅ Results ready! Got ${data.length} profiles`);
+          console.log(`[Bright Data] Profile data keys:`, Object.keys(data[0]).join(', '));
           return data[0]; // Return first profile
         }
 
