@@ -465,7 +465,105 @@ export const appRouter = router({
       return { nodes, links };
     }),
   }),
-  
+
+  // Semantic Graph and SPARQL endpoints
+  semanticGraph: router({
+    // Execute SPARQL query
+    query: protectedProcedure
+      .input(z.object({
+        sparqlQuery: z.string().min(1),
+      }))
+      .mutation(async ({ input }) => {
+        const { executeSparqlQuery } = await import("./_core/sparql");
+        return await executeSparqlQuery(input.sparqlQuery);
+      }),
+
+    // Get graph statistics
+    stats: protectedProcedure.query(async () => {
+      const { getGraphStats } = await import("./_core/sparql");
+      return getGraphStats();
+    }),
+
+    // Re-enrich contact and load semantic graph
+    // Phase 1: Semantic graphs are loaded automatically during LinkedIn enrichment
+    // This endpoint can trigger re-enrichment if needed
+    reEnrichContact: protectedProcedure
+      .input(z.object({ contactId: z.number() }))
+      .mutation(async ({ input }) => {
+        const { getContactById } = await import("./db");
+        const { enrichLinkedInProfile } = await import("./enrichment-adapter");
+
+        const contact = await getContactById(input.contactId);
+        if (!contact) {
+          throw new Error(`Contact ${input.contactId} not found`);
+        }
+
+        // If contact has LinkedIn URL, re-enrich it
+        if (contact.linkedinUrl) {
+          await enrichLinkedInProfile(contact.linkedinUrl, {
+            userId: input.contactId,
+          });
+          return { success: true, message: "Contact re-enriched and semantic graph loaded" };
+        }
+
+        return { success: false, message: "Contact does not have LinkedIn URL for enrichment" };
+      }),
+
+    // Get all entities from RDF store
+    getAllEntities: protectedProcedure.query(async () => {
+      const { executeSparqlQuery } = await import("./_core/sparql");
+
+      // Simple query to get all entities
+      const result = await executeSparqlQuery("SELECT * WHERE { ?s ?p ?o }");
+      return result;
+    }),
+
+    // Predefined query: Find all people
+    getAllPeople: protectedProcedure.query(async () => {
+      const { QueryTemplates, executeSparqlQuery } = await import("./_core/sparql");
+      return await executeSparqlQuery(QueryTemplates.getAllPeople());
+    }),
+
+    // Predefined query: Get connections for a person
+    getConnections: protectedProcedure
+      .input(z.object({ personId: z.string() }))
+      .query(async ({ input }) => {
+        const { QueryTemplates, executeSparqlQuery } = await import("./_core/sparql");
+        return await executeSparqlQuery(QueryTemplates.getConnections(input.personId));
+      }),
+
+    // Predefined query: Get provenance for a contact
+    getProvenance: protectedProcedure
+      .input(z.object({ personId: z.string() }))
+      .query(async ({ input }) => {
+        const { QueryTemplates, executeSparqlQuery } = await import("./_core/sparql");
+        return await executeSparqlQuery(QueryTemplates.getProvenance(input.personId));
+      }),
+
+    // Predefined query: Find people at a company
+    getPeopleAtCompany: protectedProcedure
+      .input(z.object({ companyName: z.string() }))
+      .query(async ({ input }) => {
+        const { QueryTemplates, executeSparqlQuery } = await import("./_core/sparql");
+        return await executeSparqlQuery(QueryTemplates.getPeopleAtCompany(input.companyName));
+      }),
+
+    // Predefined query: Find people with a skill
+    getPeopleWithSkill: protectedProcedure
+      .input(z.object({ skill: z.string() }))
+      .query(async ({ input }) => {
+        const { QueryTemplates, executeSparqlQuery } = await import("./_core/sparql");
+        return await executeSparqlQuery(QueryTemplates.getPeopleWithSkill(input.skill));
+      }),
+
+    // Clear the RDF store
+    clear: protectedProcedure.mutation(async () => {
+      const { clearGraph } = await import("./_core/sparql");
+      clearGraph();
+      return { success: true, message: "RDF store cleared" };
+    }),
+  }),
+
   companies: router({
     list: protectedProcedure.query(async () => {
       const { getAllCompanies } = await import("./db");

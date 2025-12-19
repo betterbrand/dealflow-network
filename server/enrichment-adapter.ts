@@ -19,6 +19,7 @@ import {
   type SemanticGraph,
   type TransformOptions,
 } from "./_core/semantic-transformer";
+import { loadSemanticGraph } from "./_core/sparql";
 
 export interface EnrichedProfile {
   name: string;
@@ -90,6 +91,15 @@ export async function enrichLinkedInProfile(
 
     // Parse semantic graph for structured data
     const parsed = parseSemanticGraph(semanticGraph);
+
+    // Load semantic graph into RDF triple store for SPARQL queries
+    try {
+      await loadSemanticGraph(semanticGraph);
+      console.log("[Enrichment] Loaded semantic graph into RDF store");
+    } catch (error) {
+      console.error("[Enrichment] Failed to load semantic graph into RDF store:", error);
+      // Continue without RDF store - basic enrichment still works
+    }
 
     console.log("[Enrichment] Successfully enriched LinkedIn profile:", profile.name);
 
