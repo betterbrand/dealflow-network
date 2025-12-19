@@ -48,9 +48,9 @@ export async function fetchLinkedInProfile(
   }
   const username = usernameMatch[1];
 
-  // Bright Data SERP API endpoint for LinkedIn profiles
-  // Documentation: https://docs.brightdata.com/scraping-automation/serp-api/overview
-  const apiUrl = `https://api.brightdata.com/serp/linkedin_profile`;
+  // Bright Data Scrapers API endpoint for LinkedIn profiles (Synchronous)
+  // Documentation: https://docs.brightdata.com/api-reference/web-scraper-api/synchronous-requests
+  const apiUrl = `https://api.brightdata.com/datasets/v3/scrape?format=json`;
 
   const response = await fetch(apiUrl, {
     method: "POST",
@@ -59,19 +59,7 @@ export async function fetchLinkedInProfile(
       "Authorization": `Bearer ${ENV.brightDataApiKey}`,
     },
     body: JSON.stringify({
-      url: profileUrl,
-      // Request specific fields to optimize the response
-      fields: [
-        "name",
-        "headline",
-        "location",
-        "summary",
-        "experience",
-        "education",
-        "skills",
-        "connections",
-        "profile_picture",
-      ],
+      input: [{ url: profileUrl }],
     }),
   });
 
