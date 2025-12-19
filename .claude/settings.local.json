@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(docker compose logs:*)"
+      "Bash(docker compose logs:*)",
+      "Bash(find:*)",
+      "Bash(git log:*)",
+      "WebSearch",
+      "Bash(grep:*)",
+      "Bash(npx tsx:*)"
     ]
   }
 }
