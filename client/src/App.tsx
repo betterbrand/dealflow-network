@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard";
 import Contacts from "./pages/Contacts";
 import ContactDetail from "./pages/ContactDetail";
 import Graph from "./pages/Graph";
+import SemanticGraph from "./pages/SemanticGraph";
 import Companies from "./pages/Companies";
 import CompanyDetail from "./pages/CompanyDetail";
 import Suggestions from "./pages/Suggestions";
@@ -54,6 +55,11 @@ function Router() {
       <Route path="/graph" component={() => (
         <DashboardLayout>
           <Graph />
+        </DashboardLayout>
+      )} />
+      <Route path="/semantic-graph" component={() => (
+        <DashboardLayout>
+          <SemanticGraph />
         </DashboardLayout>
       )} />
       <Route path="/companies" component={() => (
