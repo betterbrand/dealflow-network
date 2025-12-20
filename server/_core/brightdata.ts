@@ -33,18 +33,78 @@ export interface BrightDataLinkedInProfile {
 
 /**
  * Fetch LinkedIn profile data using Bright Data API
+ *
+ * Uses synchronous scrape endpoint by default for faster results (<1 minute).
+ * Falls back to async polling if response is 202 (still processing).
  */
 export async function fetchLinkedInProfile(
-  profileUrl: string
+  profileUrl: string,
+  options: { useAsync?: boolean } = {}
 ): Promise<BrightDataLinkedInProfile> {
   if (!ENV.brightDataApiKey) {
     throw new Error("BRIGHTDATA_API_KEY is not configured");
   }
 
-  // Bright Data Datasets API endpoint for LinkedIn profiles
-  // Uses trigger endpoint with dataset ID for LinkedIn profile scraping
+  // Use async trigger endpoint if explicitly requested
+  if (options.useAsync) {
+    return fetchLinkedInProfileAsync(profileUrl);
+  }
+
+  // Default: Use synchronous scrape endpoint (faster, no polling)
   const datasetId = "gd_l1viktl72bvl7bjuj0"; // LinkedIn profiles dataset
+  const apiUrl = `https://api.brightdata.com/datasets/v3/scrape?dataset_id=${datasetId}&format=json`;
+
+  console.log(`[Bright Data] Fetching profile synchronously: ${profileUrl}`);
+  const startTime = Date.now();
+
+  const response = await fetch(apiUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${ENV.brightDataApiKey}`,
+    },
+    body: JSON.stringify([
+      { url: profileUrl }
+    ]),
+  });
+
+  const responseTime = Date.now() - startTime;
+
+  // 200 OK = Results ready immediately
+  if (response.ok) {
+    console.log(`[Bright Data] ✅ Synchronous response received in ${responseTime}ms`);
+    const data = await response.json();
+    const profileData = Array.isArray(data) ? data[0] : data;
+    return transformBrightDataResponse(profileData);
+  }
+
+  // 202 Accepted = Still processing, need to poll
+  if (response.status === 202) {
+    console.log(`[Bright Data] ⏳ Response 202 (still processing after ${responseTime}ms), falling back to polling...`);
+    const data = await response.json();
+
+    if (data.snapshot_id) {
+      const profileData = await pollForResults(data.snapshot_id, ENV.brightDataApiKey);
+      return transformBrightDataResponse(profileData);
+    }
+  }
+
+  // Error
+  const errorText = await response.text().catch(() => "Unknown error");
+  throw new Error(
+    `Bright Data API request failed (${response.status} ${response.statusText}): ${errorText}`
+  );
+}
+
+/**
+ * Fetch LinkedIn profile using async trigger endpoint (legacy method)
+ * Only used when explicitly requested via options.useAsync = true
+ */
+async function fetchLinkedInProfileAsync(profileUrl: string): Promise<BrightDataLinkedInProfile> {
+  const datasetId = "gd_l1viktl72bvl7bjuj0";
   const apiUrl = `https://api.brightdata.com/datasets/v3/trigger?dataset_id=${datasetId}&format=json&uncompressed_webhook=true`;
+
+  console.log(`[Bright Data] Using async trigger endpoint: ${profileUrl}`);
 
   const response = await fetch(apiUrl, {
     method: "POST",
@@ -66,16 +126,12 @@ export async function fetchLinkedInProfile(
 
   const data = await response.json();
 
-  // The trigger endpoint returns a snapshot_id for async processing
   if (data.snapshot_id) {
     console.log(`[Bright Data] Received snapshot_id: ${data.snapshot_id}, polling for results...`);
-
-    // Poll for results using the snapshot ID
     const profileData = await pollForResults(data.snapshot_id, ENV.brightDataApiKey);
     return transformBrightDataResponse(profileData);
   }
 
-  // Fallback: If we got direct data (shouldn't happen with trigger endpoint)
   const profileData = Array.isArray(data) ? data[0] : data;
   return transformBrightDataResponse(profileData);
 }

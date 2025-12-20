@@ -193,12 +193,26 @@ export function CreateContactDialog() {
                 </div>
 
                 {isEnriching && (
-                  <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-                    <div>
-                      <p className="font-medium text-blue-900">Importing profile...</p>
-                      <p className="text-sm text-blue-700">This may take a few seconds</p>
+                  <div className="space-y-3 p-5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                      <div className="flex-1">
+                        <p className="font-semibold text-blue-900 text-lg">Importing LinkedIn profile...</p>
+                        <p className="text-sm text-blue-700 mt-1">
+                          Fetching professional data • Typically takes 30-60 seconds
+                        </p>
+                      </div>
                     </div>
+
+                    {/* Progress bar animation */}
+                    <div className="relative h-2 bg-blue-100 rounded-full overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-50 animate-pulse" />
+                      <div className="h-full w-3/5 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full animate-pulse" />
+                    </div>
+
+                    <p className="text-xs text-blue-600">
+                      Please wait while we retrieve work history, education, and profile details...
+                    </p>
                   </div>
                 )}
 
