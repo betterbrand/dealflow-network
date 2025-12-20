@@ -22,16 +22,47 @@ export interface PersonEntity {
   "@type": "Person";
   "@id": string;
   name: string;
+  givenName?: string;        // NEW: firstName
+  familyName?: string;       // NEW: lastName
   jobTitle?: string;
   email?: string;
   telephone?: string;
   url?: string;
   image?: string;
+
+  // NEW: Location (granular)
+  address?: {
+    "@type": "PostalAddress";
+    addressLocality?: string;  // city
+    addressCountry?: string;   // countryCode
+    name?: string;            // full location string
+  };
+
+  // NEW: Social proof
+  interactionStatistic?: Array<{
+    "@type": "InteractionCounter";
+    interactionType: string;
+    userInteractionCount: number;
+  }>;
+
+  // NEW: Visual assets
+  logo?: string;             // bannerImage
+
+  // NEW: External links
+  sameAs?: string[];         // bioLinks
+
   worksFor?: Array<WorksForRelation>;
   alumniOf?: Array<AlumniOfRelation>;
   knowsAbout?: string[];
-  knows?: string[]; // Links to other Person entities
-  attendedEvent?: string; // Link to Event entity (optional)
+  knows?: string[];          // Links to other Person entities (peopleAlsoViewed)
+  attendedEvent?: string;    // Link to Event entity (optional)
+
+  // NEW: LinkedIn metadata
+  identifier?: Array<{
+    "@type": "PropertyValue";
+    propertyID: string;
+    value: string;
+  }>;
 }
 
 export interface WorksForRelation {
@@ -42,6 +73,9 @@ export interface WorksForRelation {
   startDate?: string;
   endDate?: string;
   description?: string;
+  url?: string;              // NEW: Company LinkedIn URL
+  logo?: string;             // NEW: Company logo URL
+  identifier?: string;       // NEW: LinkedIn company ID
 }
 
 export interface AlumniOfRelation {
@@ -52,6 +86,8 @@ export interface AlumniOfRelation {
   field?: string;
   startDate?: string;
   endDate?: string;
+  url?: string;              // NEW: School LinkedIn URL
+  logo?: string;             // NEW: School logo URL
 }
 
 export interface OrganizationEntity {
@@ -108,11 +144,74 @@ export function transformLinkedInToSemanticGraph(
     "@type": "Person",
     "@id": personId,
     name: profile.name || "Unknown",
-    jobTitle: profile.headline,
+    givenName: profile.firstName,
+    familyName: profile.lastName,
+    jobTitle: profile.headline || profile.position,
     url: profileUrl,
-    image: profile.profilePictureUrl,
+    image: profile.profilePictureUrl || profile.avatar,
+    logo: profile.bannerImage,
     knowsAbout: profile.skills || [],
   };
+
+  // Add location (granular)
+  if (profile.city || profile.countryCode || profile.location) {
+    person.address = {
+      "@type": "PostalAddress",
+      addressLocality: profile.city,
+      addressCountry: profile.countryCode,
+      name: profile.location,
+    };
+  }
+
+  // Add social proof statistics
+  const stats: Array<{ "@type": "InteractionCounter"; interactionType: string; userInteractionCount: number }> = [];
+  if (profile.followers) {
+    stats.push({
+      "@type": "InteractionCounter",
+      interactionType: "https://schema.org/FollowAction",
+      userInteractionCount: profile.followers,
+    });
+  }
+  if (profile.connections) {
+    stats.push({
+      "@type": "InteractionCounter",
+      interactionType: "https://schema.org/ConnectAction",
+      userInteractionCount: profile.connections,
+    });
+  }
+  if (stats.length > 0) {
+    person.interactionStatistic = stats;
+  }
+
+  // Add external links (bioLinks)
+  if (profile.bioLinks && profile.bioLinks.length > 0) {
+    person.sameAs = profile.bioLinks.map(link => link.link);
+  }
+
+  // Add LinkedIn identifiers
+  const identifiers: Array<{ "@type": "PropertyValue"; propertyID: string; value: string }> = [];
+  if (profile.linkedinId) {
+    identifiers.push({
+      "@type": "PropertyValue",
+      propertyID: "linkedinId",
+      value: profile.linkedinId,
+    });
+  }
+  if (profile.linkedinNumId) {
+    identifiers.push({
+      "@type": "PropertyValue",
+      propertyID: "linkedinNumId",
+      value: profile.linkedinNumId,
+    });
+  }
+  if (identifiers.length > 0) {
+    person.identifier = identifiers;
+  }
+
+  // Add peopleAlsoViewed as knows relationship
+  if (profile.peopleAlsoViewed && profile.peopleAlsoViewed.length > 0) {
+    person.knows = profile.peopleAlsoViewed.map(p => `linkedin:${p.profileLink.match(/\/in\/([^\/]+)/)?.[1] || "unknown"}`);
+  }
 
   // Create separate Organization entities for work experience
   const worksForIds: string[] = [];
@@ -123,12 +222,23 @@ export function transformLinkedInToSemanticGraph(
         const orgId = `org:${exp.company.toLowerCase().replace(/\s+/g, "-")}-${index}`;
         worksForIds.push(orgId);
 
-        const org: OrganizationEntity = {
+        const org: OrganizationEntity & { logo?: string; identifier?: string } = {
           "@type": "Organization",
           "@id": orgId,
           name: exp.company,
-          description: exp.description,
+          description: exp.description || exp.descriptionHtml,
+          url: exp.url,              // NEW: Company LinkedIn URL
         };
+
+        // NEW: Add company logo
+        if (exp.companyLogoUrl) {
+          org.logo = exp.companyLogoUrl;
+        }
+
+        // NEW: Add LinkedIn company ID
+        if (exp.companyId) {
+          org.identifier = exp.companyId;
+        }
 
         graph.push(org);
       });
@@ -147,12 +257,22 @@ export function transformLinkedInToSemanticGraph(
         const eduId = `edu:${edu.school.toLowerCase().replace(/\s+/g, "-")}-${index}`;
         alumniOfIds.push(eduId);
 
-        const school: OrganizationEntity = {
+        const school: OrganizationEntity & { logo?: string; url?: string } = {
           "@type": "Organization",
           "@id": eduId,
           name: edu.school,
           description: edu.degree && edu.field ? `${edu.degree} in ${edu.field}` : (edu.degree || edu.field),
         };
+
+        // NEW: Add school logo
+        if (edu.instituteLogoUrl) {
+          school.logo = edu.instituteLogoUrl;
+        }
+
+        // NEW: Add school LinkedIn URL
+        if (edu.schoolUrl) {
+          school.url = edu.schoolUrl;
+        }
 
         graph.push(school);
       });
