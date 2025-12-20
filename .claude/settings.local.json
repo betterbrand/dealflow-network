@@ -6,7 +6,10 @@
       "Bash(git log:*)",
       "WebSearch",
       "Bash(grep:*)",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "Bash(npm run dev:*)",
+      "Bash(cat:*)",
+      "Bash(lsof:*)"
     ]
   }
 }
