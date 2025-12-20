@@ -24,7 +24,8 @@ export default function AdminUsers() {
       }
     },
     onError: (error) => {
-      toast.error(error.message);
+      const errorMessage = typeof error.message === 'string' ? error.message : JSON.stringify(error.message);
+      toast.error(errorMessage);
     },
   });
 
@@ -38,7 +39,8 @@ export default function AdminUsers() {
       }
     },
     onError: (error) => {
-      toast.error(error.message);
+      const errorMessage = typeof error.message === 'string' ? error.message : JSON.stringify(error.message);
+      toast.error(errorMessage);
     },
   });
 
