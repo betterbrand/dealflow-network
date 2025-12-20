@@ -474,14 +474,45 @@ export async function deleteRelationship(id: number) {
 export async function updateContactEnrichment(
   contactId: number,
   enrichedData: {
+    // Core fields (existing)
     summary?: string;
     profilePictureUrl?: string;
     experience?: Array<any>;
     education?: Array<any>;
     skills?: string[];
-    company?: string;      // ADD THIS
-    role?: string;         // ADD THIS
-    location?: string;     // ADD THIS
+    company?: string;
+    role?: string;
+    location?: string;
+
+    // === NEW: Step 1 - Social Proof ===
+    followers?: number;
+    connections?: number;
+
+    // === NEW: Step 2 - Visual Assets ===
+    bannerImageUrl?: string;
+
+    // === NEW: Step 3 - Name Parsing ===
+    firstName?: string;
+    lastName?: string;
+
+    // === NEW: Step 4 - External Links ===
+    bioLinks?: Array<{ title: string; link: string }>;
+
+    // === NEW: Step 5 - Content & Activity ===
+    posts?: Array<any>;
+    activity?: Array<any>;
+
+    // === NEW: Step 6 - Network ===
+    peopleAlsoViewed?: Array<any>;
+
+    // === NEW: Additional Metadata ===
+    linkedinId?: string;
+    linkedinNumId?: string;
+    city?: string;
+    countryCode?: string;
+    memorializedAccount?: boolean;
+    educationDetails?: string;
+    honorsAndAwards?: any;
   }
 ): Promise<void> {
   const db = await getDb();
@@ -493,14 +524,49 @@ export async function updateContactEnrichment(
   try {
     const updateData: Record<string, any> = {};
 
+    // Existing fields
     if (enrichedData.summary) updateData.summary = enrichedData.summary;
     if (enrichedData.profilePictureUrl) updateData.profilePictureUrl = enrichedData.profilePictureUrl;
     if (enrichedData.experience) updateData.experience = JSON.stringify(enrichedData.experience);
     if (enrichedData.education) updateData.education = JSON.stringify(enrichedData.education);
     if (enrichedData.skills) updateData.skills = JSON.stringify(enrichedData.skills);
-    if (enrichedData.company) updateData.company = enrichedData.company;           // ADD THIS
-    if (enrichedData.role) updateData.role = enrichedData.role;                    // ADD THIS
-    if (enrichedData.location) updateData.location = enrichedData.location;        // ADD THIS
+    if (enrichedData.company) updateData.company = enrichedData.company;
+    if (enrichedData.role) updateData.role = enrichedData.role;
+    if (enrichedData.location) updateData.location = enrichedData.location;
+
+    // === Step 1: Social Proof ===
+    if (enrichedData.followers !== undefined) updateData.followers = enrichedData.followers;
+    if (enrichedData.connections !== undefined) updateData.connections = enrichedData.connections;
+
+    // === Step 2: Visual Assets ===
+    if (enrichedData.bannerImageUrl) updateData.bannerImageUrl = enrichedData.bannerImageUrl;
+
+    // === Step 3: Name Parsing ===
+    if (enrichedData.firstName) updateData.firstName = enrichedData.firstName;
+    if (enrichedData.lastName) updateData.lastName = enrichedData.lastName;
+
+    // === Step 4: External Links ===
+    if (enrichedData.bioLinks) updateData.bioLinks = JSON.stringify(enrichedData.bioLinks);
+
+    // === Step 5: Content & Activity ===
+    if (enrichedData.posts) updateData.posts = JSON.stringify(enrichedData.posts);
+    if (enrichedData.activity) updateData.activity = JSON.stringify(enrichedData.activity);
+
+    // === Step 6: Network ===
+    if (enrichedData.peopleAlsoViewed) updateData.peopleAlsoViewed = JSON.stringify(enrichedData.peopleAlsoViewed);
+
+    // === Additional Metadata ===
+    if (enrichedData.linkedinId) updateData.linkedinId = enrichedData.linkedinId;
+    if (enrichedData.linkedinNumId) updateData.linkedinNumId = enrichedData.linkedinNumId;
+    if (enrichedData.city) updateData.city = enrichedData.city;
+    if (enrichedData.countryCode) updateData.countryCode = enrichedData.countryCode;
+    if (enrichedData.memorializedAccount !== undefined) updateData.memorializedAccount = enrichedData.memorializedAccount ? 1 : 0;
+    if (enrichedData.educationDetails) updateData.educationDetails = enrichedData.educationDetails;
+    if (enrichedData.honorsAndAwards) updateData.honorsAndAwards = JSON.stringify(enrichedData.honorsAndAwards);
+
+    // Enrichment metadata
+    updateData.lastEnrichedAt = new Date();
+    updateData.enrichmentSource = 'brightdata';
 
     if (Object.keys(updateData).length > 0) {
       await db.update(contacts)
@@ -509,6 +575,7 @@ export async function updateContactEnrichment(
 
       console.log(`[Database] Updated contact ${contactId} with enriched data`);
       console.log(`[Database] Saved company: ${enrichedData.company || 'none'}, role: ${enrichedData.role || 'none'}`);
+      console.log(`[Database] Saved ${enrichedData.followers || 0} followers, ${enrichedData.posts?.length || 0} posts, ${enrichedData.peopleAlsoViewed?.length || 0} network suggestions`);
     }
   } catch (error) {
     console.error(`[Database] Failed to update contact enrichment:`, error);
