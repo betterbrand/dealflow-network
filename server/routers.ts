@@ -163,10 +163,28 @@ export const appRouter = router({
       .input(z.object({ linkedinUrl: z.string() }))
       .mutation(async ({ input }) => {
         const { enrichLinkedInProfile } = await import("./enrichment-adapter");
+        const { getOrCreateCompanyForContact } = await import("./db-company-auto-create");
 
         console.log('[enrichFromLinkedIn] Starting enrichment for:', input.linkedinUrl);
         const enriched = await enrichLinkedInProfile(input.linkedinUrl);
         console.log('[enrichFromLinkedIn] Enrichment complete, RDF store updated');
+
+        // Auto-create company if one exists in the enriched data
+        try {
+          const companyId = await getOrCreateCompanyForContact({
+            company: enriched.experience?.[0]?.company, // Current/most recent company
+            experience: enriched.experience,
+          });
+
+          if (companyId) {
+            console.log('[enrichFromLinkedIn] Auto-created/linked company:', companyId);
+            // Return enriched data with companyId for client to use when saving contact
+            return { ...enriched, companyId };
+          }
+        } catch (error) {
+          console.error('[enrichFromLinkedIn] Failed to auto-create company:', error);
+          // Continue without company - don't fail the whole enrichment
+        }
 
         return enriched;
       }),
@@ -195,9 +213,26 @@ export const appRouter = router({
         const { getDb } = await import("./db");
         const { socialProfiles } = await import("../drizzle/schema");
         const { enrichContactBackground } = await import("./enrichment");
-        
+        const { getOrCreateCompanyForContact } = await import("./db-company-auto-create");
+
         // Separate shared contact data from user-specific data
         const { notes, conversationSummary, actionItems, sentiment, interestLevel, eventId, ...contactData } = input;
+
+        // Auto-create company if not explicitly provided but company name exists
+        if (!contactData.companyId && contactData.company) {
+          try {
+            const autoCompanyId = await getOrCreateCompanyForContact({
+              company: contactData.company,
+            });
+            if (autoCompanyId) {
+              console.log('[contacts.create] Auto-created/linked company:', autoCompanyId);
+              contactData.companyId = autoCompanyId;
+            }
+          } catch (error) {
+            console.error('[contacts.create] Failed to auto-create company:', error);
+            // Continue without company - don't fail the whole contact creation
+          }
+        }
         
         const { contactId, isNew, matchedBy } = await createOrLinkContact(
           ctx.user.id,
@@ -266,9 +301,26 @@ export const appRouter = router({
         const { getDb } = await import("./db");
         const { socialProfiles } = await import("../drizzle/schema");
         const { enrichContactBackground } = await import("./enrichment");
+        const { getOrCreateCompanyForContact } = await import("./db-company-auto-create");
         const { eq, and } = await import("drizzle-orm");
-        
+
         const { id, linkedinUrl, twitterUrl, ...data } = input;
+
+        // Auto-create company if company name is being updated and no explicit companyId provided
+        if (!data.companyId && data.company) {
+          try {
+            const autoCompanyId = await getOrCreateCompanyForContact({
+              company: data.company,
+            });
+            if (autoCompanyId) {
+              console.log('[contacts.update] Auto-created/linked company:', autoCompanyId);
+              data.companyId = autoCompanyId;
+            }
+          } catch (error) {
+            console.error('[contacts.update] Failed to auto-create company:', error);
+            // Continue without company - don't fail the whole update
+          }
+        }
         
         // Get existing contact to check if LinkedIn URL changed
         const existingContact = await getContactById(id);
