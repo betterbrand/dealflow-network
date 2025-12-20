@@ -1,12 +1,12 @@
 # Multi-stage production build for DealFlow Network
-# This Dockerfile creates an optimized production image with Rust/ASIMOV support
+# This Dockerfile creates an optimized production image
 
-# Rust stage: Build ASIMOV tools
-FROM rust:1.75-slim AS rust-builder
-WORKDIR /build
+# Rust stage: Build ASIMOV tools (COMMENTED OUT - Enable in Phase 3)
+# FROM rust:1.75-slim AS rust-builder
+# WORKDIR /build
 # Install ASIMOV brightdata-importer (assuming it's available via cargo or git)
-# TODO: Update this with actual ASIMOV installation command
-RUN cargo install asimov-brightdata-importer || echo "ASIMOV installer pending"
+# TODO: Update this with actual ASIMOV installation command when available
+# RUN cargo install asimov-brightdata-importer || echo "ASIMOV installer pending"
 
 # Base stage: Node 20 with pnpm (using debian for better Rust compatibility)
 FROM node:20-slim AS base
@@ -53,8 +53,8 @@ FROM base AS production
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Copy ASIMOV binary from rust-builder (if build succeeded)
-COPY --from=rust-builder /usr/local/cargo/bin/asimov-brightdata-importer /usr/local/bin/ || true
+# Copy ASIMOV binary from rust-builder (COMMENTED OUT - Enable in Phase 3)
+# COPY --from=rust-builder /usr/local/cargo/bin/asimov-brightdata-importer /usr/local/bin/ || true
 
 # Install only production dependencies
 COPY package.json pnpm-lock.yaml ./
