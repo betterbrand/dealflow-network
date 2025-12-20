@@ -173,6 +173,8 @@ async function pollForResults(snapshotId: string, apiKey: string): Promise<any> 
         if (Array.isArray(data) && data.length > 0) {
           console.log(`[Bright Data] ✅ Results ready! Got ${data.length} profiles`);
           console.log(`[Bright Data] Profile data keys:`, Object.keys(data[0]).join(', '));
+          console.log('[Bright Data] FULL SAMPLE RESPONSE (first 2000 chars):');
+          console.log(JSON.stringify(data[0], null, 2).substring(0, 2000));
           return data[0]; // Return first profile
         }
 
@@ -203,27 +205,167 @@ async function pollForResults(snapshotId: string, apiKey: string): Promise<any> 
  * Transform Bright Data API response to our internal format
  */
 function transformBrightDataResponse(data: any): BrightDataLinkedInProfile {
+  // === DIAGNOSTIC LOGGING START ===
+  console.log('[Bright Data] ========== RAW API RESPONSE DIAGNOSTIC ==========');
+  console.log('[Bright Data] Timestamp:', new Date().toISOString());
+  console.log('[Bright Data] Top-level keys:', Object.keys(data).join(', '));
+
+  // Log data types for all fields
+  const dataTypes = Object.fromEntries(
+    Object.entries(data).map(([key, value]) => [
+      key,
+      Array.isArray(value) ? `Array[${value.length}]` : typeof value
+    ])
+  );
+  console.log('[Bright Data] Field types:', JSON.stringify(dataTypes, null, 2));
+
+  // Log sample values for key fields
+  console.log('[Bright Data] Sample values:');
+  console.log('  - name:', data.name);
+  console.log('  - position:', data.position);
+  console.log('  - headline:', data.headline);
+  console.log('  - current_company_name:', data.current_company_name);
+  console.log('  - current_company:', JSON.stringify(data.current_company));
+  console.log('  - about:', data.about ? data.about.substring(0, 100) + '...' : 'NULL');
+  console.log('  - summary:', data.summary);
+
+  // Analyze experience structure
+  if (Array.isArray(data.experience)) {
+    console.log('[Bright Data] Experience array length:', data.experience.length);
+    if (data.experience.length > 0) {
+      console.log('[Bright Data] First experience item keys:', Object.keys(data.experience[0]).join(', '));
+      console.log('[Bright Data] First experience sample:', JSON.stringify(data.experience[0], null, 2));
+    }
+  } else if (data.experience !== null && data.experience !== undefined && typeof data.experience === 'object') {
+    console.log('[Bright Data] Experience is an OBJECT (not array)!');
+    console.log('[Bright Data] Experience object keys:', Object.keys(data.experience).join(', '));
+    console.log('[Bright Data] Experience object sample:', JSON.stringify(data.experience, null, 2).substring(0, 1000));
+  } else {
+    console.log('[Bright Data] Experience field:', data.experience === null ? 'NULL' : (data.experience === undefined ? 'UNDEFINED' : typeof data.experience));
+  }
+
+  // Analyze education structure
+  if (Array.isArray(data.education)) {
+    console.log('[Bright Data] Education array length:', data.education.length);
+    if (data.education.length > 0) {
+      console.log('[Bright Data] First education item keys:', Object.keys(data.education[0]).join(', '));
+      console.log('[Bright Data] First education sample:', JSON.stringify(data.education[0], null, 2));
+    }
+  } else if (data.education !== null && data.education !== undefined && typeof data.education === 'object') {
+    console.log('[Bright Data] Education is an OBJECT (not array)!');
+    console.log('[Bright Data] Education object keys:', Object.keys(data.education).join(', '));
+    console.log('[Bright Data] Education object sample:', JSON.stringify(data.education, null, 2).substring(0, 1000));
+  } else {
+    console.log('[Bright Data] Education field:', data.education === null ? 'NULL' : (data.education === undefined ? 'UNDEFINED' : typeof data.education));
+  }
+
+  // Analyze skills structure
+  console.log('[Bright Data] Skills type:', Array.isArray(data.skills) ? `Array[${data.skills?.length || 0}]` : typeof data.skills);
+  if (Array.isArray(data.skills) && data.skills.length > 0) {
+    console.log('[Bright Data] First 5 skills:', JSON.stringify(data.skills.slice(0, 5), null, 2));
+  }
+
+  // Track which fallbacks are being used
+  const fallbacksUsed: string[] = [];
+
+  // Transform with fallback tracking
+  const name = data.name || "";
+  if (!data.name) fallbacksUsed.push('name (empty)');
+
+  // Use position as primary source (that's what API returns)
+  const headline = data.position || data.headline;
+  if (!data.position && data.headline) fallbacksUsed.push('position->headline');
+  if (!data.position && !data.headline) fallbacksUsed.push('headline (empty)');
+
+  // Use about as primary source (that's what API returns)
+  const summary = data.about || data.summary;
+  if (!data.summary && data.about) fallbacksUsed.push('summary->about');
+
+  // FIXED: API uses "company" directly (NOT company_name), and "start_date"/"end_date" (NOT startDate/endDate)
+  const experience = (data.experience || []).map((exp: any) => ({
+    title: exp.title,
+    company: exp.company,  // Direct field
+    startDate: exp.start_date,  // Underscore format
+    endDate: exp.end_date,      // Underscore format
+    description: exp.description_html || exp.description,
+  }));
+
+  // Track company issues
+  if (data.experience && Array.isArray(data.experience)) {
+    data.experience.forEach((exp: any, idx: number) => {
+      if (!exp.company) {
+        fallbacksUsed.push(`experience[${idx}].company (MISSING)`);
+      }
+    });
+  }
+
+  // FIXED: API uses "title" for school name, and "start_year"/"end_year" (NOT start_date/end_date)
+  // Education can be an array or sometimes missing/malformed
+  const educationData = Array.isArray(data.education) ? data.education : [];
+  const education = educationData.map((edu: any) => ({
+    school: edu.title || edu.school_name || edu.school,  // "title" is the primary field
+    degree: edu.degree || edu.degree_name,
+    field: edu.field_of_study || edu.field,
+    startDate: edu.start_year || edu.start_date,  // Year format, not date
+    endDate: edu.end_year || edu.end_date,        // Year format, not date
+  }));
+
+  // Track school fallbacks
+  if (educationData.length > 0) {
+    educationData.forEach((edu: any, idx: number) => {
+      if (!edu.title) {
+        fallbacksUsed.push(`education[${idx}].title (MISSING - using fallback)`);
+      }
+    });
+  }
+
+  const skills = Array.isArray(data.skills) ? data.skills : (data.languages || []).map((lang: any) => lang.name || lang);
+  if (!Array.isArray(data.skills) && data.languages) {
+    fallbacksUsed.push('skills->languages');
+  }
+
+  // Log transformation results
+  console.log('[Bright Data] ========== TRANSFORMATION RESULTS ==========');
+  console.log('[Bright Data] Fallbacks used:', fallbacksUsed.length > 0 ? fallbacksUsed : 'NONE');
+  console.log('[Bright Data] Experience count (raw):', data.experience?.length || 0);
+  console.log('[Bright Data] Experience count (transformed):', experience.length);
+  console.log('[Bright Data] Experience entries with missing company:', experience.filter((e: any) => !e.company).length);
+  console.log('[Bright Data] Education count (raw):', data.education?.length || 0);
+  console.log('[Bright Data] Education count (transformed):', education.length);
+  console.log('[Bright Data] Education entries with missing school:', education.filter((e: any) => !e.school).length);
+  console.log('[Bright Data] Skills count:', skills.length);
+
+  // Warnings for empty critical fields
+  if (experience.length === 0 && data.experience?.length > 0) {
+    console.error('[Bright Data] ⚠️  WARNING: Experience array exists in raw data but transformed to empty!');
+  }
+  if (experience.filter((e: any) => !e.company).length > 0) {
+    console.error(`[Bright Data] ⚠️  WARNING: ${experience.filter((e: any) => !e.company).length} experience entries have no company!`);
+  }
+  if (education.length === 0 && data.education?.length > 0) {
+    console.error('[Bright Data] ⚠️  WARNING: Education array exists in raw data but transformed to empty!');
+  }
+  if (education.filter((e: any) => !e.school).length > 0) {
+    console.error(`[Bright Data] ⚠️  WARNING: ${education.filter((e: any) => !e.school).length} education entries have no school!`);
+  }
+  console.log('[Bright Data] ======================================================');
+  // === DIAGNOSTIC LOGGING END ===
+
+  // FIXED: API uses "avatar" (NOT profile_picture_url), "connections" (NOT connections_count)
+  // Location can be an object with "city" field or a string
+  const location = typeof data.location === 'object'
+    ? (data.location?.city || data.city)
+    : (data.location || data.city);
+
   return {
-    name: data.name || "",
-    headline: data.headline || data.position,
-    location: data.location,
-    summary: data.summary || data.about,
-    experience: (data.experience || []).map((exp: any) => ({
-      title: exp.title,
-      company: exp.company_name || exp.company,
-      startDate: exp.start_date,
-      endDate: exp.end_date,
-      description: exp.description,
-    })),
-    education: (data.education || []).map((edu: any) => ({
-      school: edu.title || edu.school_name || edu.school,
-      degree: edu.degree || edu.degree_name,
-      field: edu.field_of_study || edu.field,
-      startDate: edu.start_year || edu.start_date,
-      endDate: edu.end_year || edu.end_date,
-    })),
-    skills: Array.isArray(data.skills) ? data.skills : (data.languages || []).map((lang: any) => lang.name || lang),
-    connections: data.connections_count || data.connections,
-    profilePictureUrl: data.profile_picture_url || data.profile_picture || data.avatar,
+    name,
+    headline,
+    location,
+    summary,
+    experience,
+    education,
+    skills,
+    connections: data.connections || data.connections_count,  // Primary field is "connections"
+    profilePictureUrl: data.avatar || data.profile_picture_url || data.profile_picture,  // "avatar" is primary
   };
 }

@@ -479,6 +479,9 @@ export async function updateContactEnrichment(
     experience?: Array<any>;
     education?: Array<any>;
     skills?: string[];
+    company?: string;      // ADD THIS
+    role?: string;         // ADD THIS
+    location?: string;     // ADD THIS
   }
 ): Promise<void> {
   const db = await getDb();
@@ -489,19 +492,23 @@ export async function updateContactEnrichment(
 
   try {
     const updateData: Record<string, any> = {};
-    
+
     if (enrichedData.summary) updateData.summary = enrichedData.summary;
     if (enrichedData.profilePictureUrl) updateData.profilePictureUrl = enrichedData.profilePictureUrl;
     if (enrichedData.experience) updateData.experience = JSON.stringify(enrichedData.experience);
     if (enrichedData.education) updateData.education = JSON.stringify(enrichedData.education);
     if (enrichedData.skills) updateData.skills = JSON.stringify(enrichedData.skills);
+    if (enrichedData.company) updateData.company = enrichedData.company;           // ADD THIS
+    if (enrichedData.role) updateData.role = enrichedData.role;                    // ADD THIS
+    if (enrichedData.location) updateData.location = enrichedData.location;        // ADD THIS
 
     if (Object.keys(updateData).length > 0) {
       await db.update(contacts)
         .set(updateData)
         .where(eq(contacts.id, contactId));
-      
+
       console.log(`[Database] Updated contact ${contactId} with enriched data`);
+      console.log(`[Database] Saved company: ${enrichedData.company || 'none'}, role: ${enrichedData.role || 'none'}`);
     }
   } catch (error) {
     console.error(`[Database] Failed to update contact enrichment:`, error);

@@ -89,6 +89,27 @@ export async function enrichContactBackground(
       return;
     }
     
+    // Extract company and role from experience or headline
+    let company: string | undefined;
+    let role: string | undefined;
+
+    // Try to get from first current/recent experience
+    if (enrichedData.experience && enrichedData.experience.length > 0) {
+      const currentJob = enrichedData.experience[0]; // Most recent is first
+      company = currentJob.company;
+      role = currentJob.title;
+    }
+
+    // Fallback to headline if no experience
+    if (!company && !role && enrichedData.headline) {
+      // Try to parse "Title at Company" format
+      const match = enrichedData.headline.match(/^(.+?)\s+at\s+(.+)$/i);
+      if (match) {
+        role = match[1].trim();
+        company = match[2].trim();
+      }
+    }
+
     // Update the contact in the database with enriched data
     await updateContactEnrichment(contactId, {
       summary: enrichedData.summary,
@@ -96,6 +117,9 @@ export async function enrichContactBackground(
       experience: enrichedData.experience,
       education: enrichedData.education,
       skills: enrichedData.skills,
+      company,           // ADD THIS
+      role,              // ADD THIS
+      location: enrichedData.location, // ADD THIS
     });
     
     console.log(`[Enrichment] Enrichment complete for contact ${contactId}`);
