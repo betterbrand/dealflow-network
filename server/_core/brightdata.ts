@@ -149,9 +149,9 @@ async function pollForResults(snapshotId: string, apiKey: string): Promise<any> 
 function transformBrightDataResponse(data: any): BrightDataLinkedInProfile {
   return {
     name: data.name || "",
-    headline: data.headline,
+    headline: data.headline || data.position,
     location: data.location,
-    summary: data.summary,
+    summary: data.summary || data.about,
     experience: (data.experience || []).map((exp: any) => ({
       title: exp.title,
       company: exp.company_name || exp.company,
@@ -160,14 +160,14 @@ function transformBrightDataResponse(data: any): BrightDataLinkedInProfile {
       description: exp.description,
     })),
     education: (data.education || []).map((edu: any) => ({
-      school: edu.school_name || edu.school,
-      degree: edu.degree,
+      school: edu.title || edu.school_name || edu.school,
+      degree: edu.degree || edu.degree_name,
       field: edu.field_of_study || edu.field,
-      startDate: edu.start_date,
-      endDate: edu.end_date,
+      startDate: edu.start_year || edu.start_date,
+      endDate: edu.end_year || edu.end_date,
     })),
-    skills: data.skills || [],
+    skills: Array.isArray(data.skills) ? data.skills : (data.languages || []).map((lang: any) => lang.name || lang),
     connections: data.connections_count || data.connections,
-    profilePictureUrl: data.profile_picture_url || data.profile_picture,
+    profilePictureUrl: data.profile_picture_url || data.profile_picture || data.avatar,
   };
 }
