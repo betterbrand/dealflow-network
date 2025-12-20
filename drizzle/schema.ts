@@ -51,7 +51,42 @@ export const contacts = mysqlTable("contacts", {
   experience: text("experience"), // JSON array
   education: text("education"), // JSON array
   skills: text("skills"), // JSON array
-  
+
+  // === STEP 1: Social Proof & Reach ===
+  followers: int("followers"), // LinkedIn follower count
+  connections: int("connections"), // LinkedIn connection count
+
+  // === STEP 2: Visual Assets ===
+  bannerImageUrl: text("bannerImageUrl"), // Profile banner image
+  // Note: company/school logos stored in experience/education JSON arrays
+
+  // === STEP 3: Name Parsing ===
+  firstName: varchar("firstName", { length: 100 }),
+  lastName: varchar("lastName", { length: 100 }),
+
+  // === STEP 4: External Links ===
+  bioLinks: text("bioLinks"), // JSON array: [{title, link}]
+
+  // === STEP 5: Recent Activity & Content ===
+  posts: text("posts"), // JSON array of recent LinkedIn posts
+  activity: text("activity"), // JSON array of recent activity
+
+  // === STEP 6: Network Expansion ===
+  peopleAlsoViewed: text("peopleAlsoViewed"), // JSON array of similar profiles
+
+  // === Additional LinkedIn Metadata ===
+  linkedinId: varchar("linkedinId", { length: 100 }), // LinkedIn profile ID
+  linkedinNumId: varchar("linkedinNumId", { length: 100 }), // Numeric LinkedIn ID
+  city: varchar("city", { length: 255 }), // Granular city (parsed from location)
+  countryCode: varchar("countryCode", { length: 10 }), // ISO country code
+  memorializedAccount: int("memorializedAccount").default(0), // Boolean: is memorial account
+  educationDetails: text("educationDetails"), // Free-text education summary
+  honorsAndAwards: text("honorsAndAwards"), // JSON object of awards
+
+  // === Enrichment Metadata ===
+  lastEnrichedAt: timestamp("lastEnrichedAt"), // When profile was last enriched
+  enrichmentSource: varchar("enrichmentSource", { length: 50 }), // "brightdata", "manual", etc.
+
   // Metadata
   companyId: int("companyId").references(() => companies.id),
   createdBy: int("createdBy").notNull().references(() => users.id), // Who first created this contact
