@@ -50,7 +50,12 @@ export default function SemanticGraph() {
 
   const { data: allEntities, isLoading, refetch } = trpc.semanticGraph.getAllEntities.useQuery(
     undefined,
-    { enabled: !!user }
+    {
+      enabled: !!user,
+      onSuccess: (data) => {
+        console.log('[SemanticGraph] Query result:', data);
+      }
+    }
   );
 
   const { data: stats } = trpc.semanticGraph.stats.useQuery(
@@ -59,14 +64,17 @@ export default function SemanticGraph() {
   );
 
   const enrichMutation = trpc.contacts.enrichFromLinkedIn.useMutation({
-    onSuccess: () => {
-      toast.success("Profile enriched successfully!");
+    onSuccess: (data) => {
+      console.log('[SemanticGraph] Import success:', data);
+      toast.success("Profile imported successfully!");
       setLinkedinUrl("");
       setShowEnrichForm(false);
+      console.log('[SemanticGraph] Calling refetch...');
       refetch();
     },
     onError: (error) => {
-      toast.error(`Enrichment failed: ${error.message}`);
+      console.error('[SemanticGraph] Import error:', error);
+      toast.error(`Import failed: ${error.message}`);
     },
   });
 
@@ -387,7 +395,7 @@ export default function SemanticGraph() {
               onClick={() => setShowEnrichForm(!showEnrichForm)}
             >
               <Plus className="h-4 w-4 mr-2" />
-              Enrich Profile
+              Import from LinkedIn
             </Button>
             <Button
               variant="outline"
@@ -411,7 +419,7 @@ export default function SemanticGraph() {
           </div>
         </div>
 
-        {/* Enrich Form */}
+        {/* Import Form */}
         {showEnrichForm && (
           <Card className="mb-6">
             <CardContent className="pt-6">
@@ -428,11 +436,11 @@ export default function SemanticGraph() {
                   onClick={handleEnrich}
                   disabled={enrichMutation.isPending}
                 >
-                  {enrichMutation.isPending ? "Enriching..." : "Enrich"}
+                  {enrichMutation.isPending ? "Importing..." : "Import"}
                 </Button>
               </div>
               <p className="text-sm text-muted-foreground mt-2">
-                Paste a LinkedIn profile URL to enrich and add to the knowledge graph
+                Paste a LinkedIn profile URL to import and add to the knowledge graph
               </p>
             </CardContent>
           </Card>
@@ -463,14 +471,14 @@ export default function SemanticGraph() {
                       No entities in the semantic graph yet
                     </h3>
                     <p className="text-muted-foreground mb-4">
-                      Click "Enrich Profile" above to add LinkedIn profiles to the knowledge graph
+                      Click "Import from LinkedIn" above to add profiles to the knowledge graph
                     </p>
                     <Button
                       onClick={() => setShowEnrichForm(true)}
                       variant="default"
                     >
                       <Plus className="h-4 w-4 mr-2" />
-                      Add Your First Profile
+                      Import Your First Profile
                     </Button>
                   </div>
                 </div>

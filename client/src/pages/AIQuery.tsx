@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Loader2, Send, Sparkles, User, Building2, MapPin, Briefcase, History, X, Clock, Lightbulb } from "lucide-react";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
@@ -14,7 +15,7 @@ export default function AIQuery() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [showHistory, setShowHistory] = useState(true);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [selectedHistoryIndex, setSelectedHistoryIndex] = useState(-1);
   const [selectedResultIndex, setSelectedResultIndex] = useState(-1);
@@ -102,10 +103,10 @@ export default function AIQuery() {
         return;
       }
 
-      // Cmd/Ctrl + Shift + H: Toggle history sidebar
+      // Cmd/Ctrl + Shift + H: Toggle history modal
       if (modKey && e.shiftKey && e.key === 'H') {
         e.preventDefault();
-        setShowHistory(!showHistory);
+        setShowHistoryModal(!showHistoryModal);
         return;
       }
 
@@ -134,7 +135,7 @@ export default function AIQuery() {
       }
 
       // Arrow Up/Down: Navigate history
-      if (queryHistory && queryHistory.length > 0 && showHistory) {
+      if (queryHistory && queryHistory.length > 0 && showHistoryModal) {
         if (e.key === 'ArrowUp' && document.activeElement !== inputRef.current) {
           e.preventDefault();
           setSelectedHistoryIndex(prev => 
@@ -193,96 +194,30 @@ export default function AIQuery() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [query, showHistory, queryHistory, selectedHistoryIndex, results, selectedResultIndex]);
+  }, [query, showHistoryModal, queryHistory, selectedHistoryIndex, results, selectedResultIndex]);
 
   return (
-    <div className="flex gap-6 h-full">
-      {/* Query History Sidebar */}
-      {showHistory && (
-        <div className="w-80 flex-shrink-0">
-          <Card className="h-full">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <History className="h-5 w-5" />
-                  Query History
-                </CardTitle>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowHistory(false)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              <CardDescription>Recent searches</CardDescription>
-            </CardHeader>
-            <CardContent className="max-h-[calc(100vh-16rem)] overflow-y-auto">
-              {queryHistory && queryHistory.length > 0 ? (
-                <div className="space-y-2">
-                  {queryHistory.map((item) => (
-                    <div
-                      key={item.id}
-                      className={`group p-3 border rounded-lg hover:bg-accent cursor-pointer transition-colors ${
-                        queryHistory.indexOf(item) === selectedHistoryIndex ? 'bg-accent ring-2 ring-primary' : ''
-                      }`}
-                      onClick={() => handleHistoryClick(item.query)}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium line-clamp-2">
-                            {item.query}
-                          </p>
-                          <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                            <Clock className="h-3 w-3" />
-                            {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
-                          </div>
-                          {item.resultCount !== null && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {item.resultCount} {item.resultCount === 1 ? "result" : "results"}
-                            </p>
-                          )}
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0"
-                          onClick={(e) => handleDeleteHistory(item.id, e)}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full mt-2"
-                    onClick={handleClearHistory}
-                  >
-                    Clear All
-                  </Button>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  No query history yet
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Main Content */}
-      <div className="flex-1 min-w-0">
+    <>
+      <div className="flex-1 h-full">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
-            <Sparkles className="h-8 w-8 text-purple-500" />
-            AI Network Query
-          </h1>
-          <p className="text-muted-foreground">
-            Ask questions about your network in natural language
-          </p>
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
+                <Sparkles className="h-8 w-8 text-purple-500" />
+                AI Network Query
+              </h1>
+              <p className="text-muted-foreground">
+                Ask questions about your network in natural language
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => setShowHistoryModal(true)}
+            >
+              <History className="h-4 w-4 mr-2" />
+              History
+            </Button>
+          </div>
         </div>
 
         {/* Query Input */}
@@ -480,24 +415,79 @@ export default function AIQuery() {
         )}
       </div>
 
-      {/* Show History Button (when hidden) */}
-      {!showHistory && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="fixed bottom-8 right-8"
-          onClick={() => setShowHistory(true)}
-        >
-          <History className="mr-2 h-4 w-4" />
-          Show History
-        </Button>
-      )}
+      {/* Query History Modal */}
+      <Dialog open={showHistoryModal} onOpenChange={setShowHistoryModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" />
+              Query History
+            </DialogTitle>
+            <DialogDescription>Recent searches</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            {queryHistory && queryHistory.length > 0 ? (
+              <div className="space-y-2">
+                {queryHistory.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`group p-3 border rounded-lg hover:bg-accent cursor-pointer transition-colors ${
+                      queryHistory.indexOf(item) === selectedHistoryIndex ? 'bg-accent ring-2 ring-primary' : ''
+                    }`}
+                    onClick={() => {
+                      handleHistoryClick(item.query);
+                      setShowHistoryModal(false);
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium line-clamp-2">
+                          {item.query}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                          <Clock className="h-3 w-3" />
+                          {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
+                        </div>
+                        {item.resultCount !== null && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {item.resultCount} {item.resultCount === 1 ? "result" : "results"}
+                          </p>
+                        )}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0"
+                        onClick={(e) => handleDeleteHistory(item.id, e)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full mt-2"
+                  onClick={handleClearHistory}
+                >
+                  Clear All
+                </Button>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                No query history yet
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Keyboard Shortcuts Modal */}
-      <KeyboardShortcutsModal 
-        open={showShortcuts} 
-        onOpenChange={setShowShortcuts} 
+      <KeyboardShortcutsModal
+        open={showShortcuts}
+        onOpenChange={setShowShortcuts}
       />
-    </div>
+    </>
   );
 }

@@ -80,7 +80,6 @@ Only include filters that are explicitly mentioned in the query.`;
       type: "json_schema",
       json_schema: {
         name: "query_parse",
-        strict: true,
         schema: {
           type: "object",
           properties: {

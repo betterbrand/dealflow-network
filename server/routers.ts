@@ -163,7 +163,11 @@ export const appRouter = router({
       .input(z.object({ linkedinUrl: z.string() }))
       .mutation(async ({ input }) => {
         const { enrichLinkedInProfile } = await import("./enrichment-adapter");
+
+        console.log('[enrichFromLinkedIn] Starting enrichment for:', input.linkedinUrl);
         const enriched = await enrichLinkedInProfile(input.linkedinUrl);
+        console.log('[enrichFromLinkedIn] Enrichment complete, RDF store updated');
+
         return enriched;
       }),
     
@@ -513,8 +517,10 @@ export const appRouter = router({
     getAllEntities: protectedProcedure.query(async () => {
       const { executeSparqlQuery } = await import("./_core/sparql");
 
+      console.log('[getAllEntities] Querying RDF store...');
       // Simple query to get all entities
       const result = await executeSparqlQuery("SELECT * WHERE { ?s ?p ?o }");
+      console.log('[getAllEntities] Query returned:', result.results?.length || 0, 'triples');
       return result;
     }),
 

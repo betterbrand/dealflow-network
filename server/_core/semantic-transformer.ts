@@ -114,34 +114,52 @@ export function transformLinkedInToSemanticGraph(
     knowsAbout: profile.skills || [],
   };
 
-  // Add work experience as worksFor relationships
+  // Create separate Organization entities for work experience
+  const worksForIds: string[] = [];
   if (profile.experience && profile.experience.length > 0) {
-    person.worksFor = profile.experience
-      .filter(exp => exp.company) // Only include if company name exists
-      .map((exp, index) => ({
-        "@type": "Organization" as const,
-        "@id": `org:${exp.company.toLowerCase().replace(/\s+/g, "-")}-${index}`,
-        name: exp.company,
-        jobTitle: exp.title,
-        startDate: exp.startDate,
-        endDate: exp.endDate,
-        description: exp.description,
-      }));
+    profile.experience
+      .filter(exp => exp.company)
+      .forEach((exp, index) => {
+        const orgId = `org:${exp.company.toLowerCase().replace(/\s+/g, "-")}-${index}`;
+        worksForIds.push(orgId);
+
+        const org: OrganizationEntity = {
+          "@type": "Organization",
+          "@id": orgId,
+          name: exp.company,
+          description: exp.description,
+        };
+
+        graph.push(org);
+      });
   }
 
-  // Add education as alumniOf relationships
+  if (worksForIds.length > 0) {
+    person.worksFor = worksForIds.map(id => ({ "@id": id } as any));
+  }
+
+  // Create separate EducationalOrganization entities for education
+  const alumniOfIds: string[] = [];
   if (profile.education && profile.education.length > 0) {
-    person.alumniOf = profile.education
-      .filter(edu => edu.school) // Only include if school name exists
-      .map((edu, index) => ({
-        "@type": "EducationalOrganization" as const,
-        "@id": `edu:${edu.school.toLowerCase().replace(/\s+/g, "-")}-${index}`,
-        name: edu.school,
-        degree: edu.degree,
-        field: edu.field,
-        startDate: edu.startDate,
-        endDate: edu.endDate,
-      }));
+    profile.education
+      .filter(edu => edu.school)
+      .forEach((edu, index) => {
+        const eduId = `edu:${edu.school.toLowerCase().replace(/\s+/g, "-")}-${index}`;
+        alumniOfIds.push(eduId);
+
+        const school: OrganizationEntity = {
+          "@type": "Organization",
+          "@id": eduId,
+          name: edu.school,
+          description: edu.degree && edu.field ? `${edu.degree} in ${edu.field}` : (edu.degree || edu.field),
+        };
+
+        graph.push(school);
+      });
+  }
+
+  if (alumniOfIds.length > 0) {
+    person.alumniOf = alumniOfIds.map(id => ({ "@id": id } as any));
   }
 
   // Add event attendance if provided
