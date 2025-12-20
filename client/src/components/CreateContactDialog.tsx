@@ -89,10 +89,15 @@ export function CreateContactDialog() {
       if (isLinkedIn) {
         // Use existing LinkedIn enrichment
         const enriched = await enrichMutation.mutateAsync({ linkedinUrl: profileUrl });
-        
+
+        // Check if enrichment was cancelled (mutation was reset)
+        if (!enrichMutation.isSuccess) {
+          return;
+        }
+
         // Extract company and role from most recent experience
         const latestExperience = enriched.experience?.[0];
-        
+
         setFormData({
           name: enriched.name || "",
           company: latestExperience?.company || "",
@@ -105,7 +110,7 @@ export function CreateContactDialog() {
           twitterUrl: "",
           notes: enriched.summary || "",
         });
-        
+
         toast.success("Profile imported successfully!");
         setStep("review");
       } else {
@@ -119,10 +124,20 @@ export function CreateContactDialog() {
         setStep("review");
       }
     } catch (error: any) {
-      toast.error(`Failed to import profile: ${error.message}`);
+      // Don't show error if it was cancelled
+      if (error.message !== 'CANCELLED') {
+        toast.error(`Failed to import profile: ${error.message}`);
+      }
     } finally {
       setIsEnriching(false);
     }
+  };
+
+  const handleCancelEnrichment = () => {
+    // Reset the mutation to cancel the ongoing request
+    enrichMutation.reset();
+    setIsEnriching(false);
+    toast.info("Import cancelled");
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -210,9 +225,14 @@ export function CreateContactDialog() {
                       <div className="h-full w-3/5 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full animate-pulse" />
                     </div>
 
-                    <p className="text-xs text-blue-600">
-                      Please wait while we retrieve work history, education, and profile details...
-                    </p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-blue-600">
+                        Please wait while we retrieve work history, education, and profile details...
+                      </p>
+                      <p className="text-xs text-blue-500 font-medium">
+                        Click "Cancel Import" below to stop
+                      </p>
+                    </div>
                   </div>
                 )}
 
@@ -239,22 +259,33 @@ export function CreateContactDialog() {
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={resetDialog}>
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleImport} 
-                disabled={isEnriching || !profileUrl.trim()}
-              >
-                {isEnriching ? (
-                  <>
+              {isEnriching ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={handleCancelEnrichment}
+                  >
+                    Cancel Import
+                  </Button>
+                  <Button disabled>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Importing...
-                  </>
-                ) : (
-                  "Import Profile"
-                )}
-              </Button>
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button type="button" variant="outline" onClick={resetDialog}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleImport}
+                    disabled={!profileUrl.trim()}
+                  >
+                    Import Profile
+                  </Button>
+                </>
+              )}
             </DialogFooter>
           </>
         ) : (
