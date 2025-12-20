@@ -8,16 +8,37 @@
 import { ENV } from "./env";
 
 export interface BrightDataLinkedInProfile {
+  // Identity
   name?: string;
+  firstName?: string;
+  lastName?: string;
+  linkedinId?: string;
+  linkedinNumId?: string;
+
+  // Professional
   headline?: string;
+  position?: string;
+
+  // Location
   location?: string;
+  city?: string;
+  countryCode?: string;
+
+  // Bio
   summary?: string;
+  about?: string;
+
+  // Experience & Education
   experience?: Array<{
     title: string;
     company: string;
+    companyId?: string;
     startDate?: string;
     endDate?: string;
     description?: string;
+    descriptionHtml?: string;
+    url?: string;
+    companyLogoUrl?: string; // NEW: Company logo from LinkedIn
   }>;
   education?: Array<{
     school: string;
@@ -25,10 +46,75 @@ export interface BrightDataLinkedInProfile {
     field?: string;
     startDate?: string;
     endDate?: string;
+    description?: string;
+    url?: string;
+    instituteLogoUrl?: string; // NEW: School logo from LinkedIn
   }>;
+  educationDetails?: string; // Free-text education summary
+
+  // Skills & Recognition
   skills?: string[];
+  honorsAndAwards?: {
+    title?: string;
+    items?: Array<{ name: string; issuer?: string; date?: string }>;
+  };
+
+  // Social Proof
   connections?: number;
+  followers?: number;
+
+  // Visual Assets
   profilePictureUrl?: string;
+  avatar?: string;
+  bannerImage?: string;
+  defaultAvatar?: boolean;
+
+  // External Links
+  bioLinks?: Array<{
+    title: string;
+    link: string;
+  }>;
+
+  // Content & Activity
+  posts?: Array<{
+    id: string;
+    title: string;
+    attribution?: string;
+    link: string;
+    createdAt: string;
+    interaction?: string;
+  }>;
+  activity?: Array<{
+    id: string;
+    interaction: string;
+    link: string;
+    title: string;
+    img?: string;
+  }>;
+
+  // Network
+  peopleAlsoViewed?: Array<{
+    name: string;
+    profileLink: string;
+    about?: string;
+    location?: string;
+  }>;
+
+  // Current Company Details
+  currentCompany?: {
+    name: string;
+    companyId: string;
+    title: string;
+    location?: string;
+  };
+  currentCompanyName?: string;
+  currentCompanyCompanyId?: string;
+
+  // Metadata
+  memorializedAccount?: boolean;
+  url?: string;
+  inputUrl?: string;
+  timestamp?: string;
 }
 
 /**
@@ -285,9 +371,13 @@ function transformBrightDataResponse(data: any): BrightDataLinkedInProfile {
   const experience = (data.experience || []).map((exp: any) => ({
     title: exp.title,
     company: exp.company,  // Direct field
+    companyId: exp.company_id,  // LinkedIn company ID
     startDate: exp.start_date,  // Underscore format
     endDate: exp.end_date,      // Underscore format
     description: exp.description_html || exp.description,
+    descriptionHtml: exp.description_html,
+    url: exp.url,  // Company LinkedIn URL
+    companyLogoUrl: exp.company_logo_url,  // NEW: Company logo
   }));
 
   // Track company issues
@@ -308,6 +398,9 @@ function transformBrightDataResponse(data: any): BrightDataLinkedInProfile {
     field: edu.field_of_study || edu.field,
     startDate: edu.start_year || edu.start_date,  // Year format, not date
     endDate: edu.end_year || edu.end_date,        // Year format, not date
+    description: edu.description_html || edu.description,
+    url: edu.url,  // School LinkedIn URL
+    instituteLogoUrl: edu.institute_logo_url,  // NEW: School logo
   }));
 
   // Track school fallbacks
@@ -357,15 +450,69 @@ function transformBrightDataResponse(data: any): BrightDataLinkedInProfile {
     ? (data.location?.city || data.city)
     : (data.location || data.city);
 
+  // Parse city and country from location
+  const city = data.city || (typeof data.location === 'object' ? data.location?.city : null);
+  const countryCode = data.country_code || (typeof data.location === 'object' ? data.location?.country_code : null);
+
   return {
+    // === Identity ===
     name,
+    firstName: data.first_name,
+    lastName: data.last_name,
+    linkedinId: data.linkedin_id,
+    linkedinNumId: data.linkedin_num_id,
+
+    // === Professional ===
     headline,
+    position: data.position,
+
+    // === Location ===
     location,
+    city,
+    countryCode,
+
+    // === Bio ===
     summary,
+    about: data.about,
+
+    // === Experience & Education ===
     experience,
     education,
+    educationDetails: data.educations_details,  // Free-text summary
+
+    // === Skills & Recognition ===
     skills,
-    connections: data.connections || data.connections_count,  // Primary field is "connections"
-    profilePictureUrl: data.avatar || data.profile_picture_url || data.profile_picture,  // "avatar" is primary
+    honorsAndAwards: data.honors_and_awards,  // Object with awards
+
+    // === Social Proof ===
+    connections: data.connections || data.connections_count,
+    followers: data.followers,
+
+    // === Visual Assets ===
+    profilePictureUrl: data.avatar || data.profile_picture_url || data.profile_picture,
+    avatar: data.avatar,
+    bannerImage: data.banner_image,
+    defaultAvatar: data.default_avatar,
+
+    // === External Links ===
+    bioLinks: data.bio_links,  // Array of {title, link}
+
+    // === Content & Activity ===
+    posts: data.posts,  // Array of recent posts
+    activity: data.activity,  // Array of recent activity
+
+    // === Network ===
+    peopleAlsoViewed: data.people_also_viewed,  // Array of similar profiles
+
+    // === Current Company ===
+    currentCompany: data.current_company,
+    currentCompanyName: data.current_company_name,
+    currentCompanyCompanyId: data.current_company_company_id,
+
+    // === Metadata ===
+    memorializedAccount: data.memorialized_account,
+    url: data.url,
+    inputUrl: data.input_url,
+    timestamp: data.timestamp,
   };
 }
