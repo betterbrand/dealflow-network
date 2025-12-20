@@ -156,11 +156,19 @@ export async function fetchLinkedInProfile(
 
   const responseTime = Date.now() - startTime;
 
-  // 200 OK = Results ready immediately
+  // 200 OK = Results ready immediately (usually)
   if (response.ok) {
     console.log(`[Bright Data] ✅ Synchronous response received in ${responseTime}ms`);
     const data = await response.json();
     const profileData = Array.isArray(data) ? data[0] : data;
+
+    // DETECT: Sometimes 200 OK returns {snapshot_id, message} when still processing
+    if (profileData.snapshot_id && profileData.message && !profileData.name) {
+      console.log(`[Bright Data] ⏳ Response 200 but contains snapshot_id (still processing), falling back to polling...`);
+      const polledData = await pollForResults(profileData.snapshot_id, ENV.brightDataApiKey);
+      return transformBrightDataResponse(polledData);
+    }
+
     return transformBrightDataResponse(profileData);
   }
 
@@ -291,9 +299,30 @@ async function pollForResults(snapshotId: string, apiKey: string): Promise<any> 
  * Transform Bright Data API response to our internal format
  */
 function transformBrightDataResponse(data: any): BrightDataLinkedInProfile {
+  // === DETECT RESPONSE TYPE ===
+  const hasSnapshotId = data.snapshot_id && data.message;
+  const hasProfileData = data.name || data.position || data.experience || data.education;
+  const hasPrivacyRestriction = data.name && (!data.experience && !data.education && !data.about);
+
+  if (hasSnapshotId) {
+    console.error('[Bright Data] ⚠️  STILL PROCESSING - Response contains snapshot_id, scrape not complete yet');
+    console.error('[Bright Data] snapshot_id:', data.snapshot_id);
+    console.error('[Bright Data] message:', data.message);
+    console.error('[Bright Data] → This means the synchronous request timed out. Need to poll or retry.');
+  }
+
+  if (hasPrivacyRestriction) {
+    console.warn('[Bright Data] ⚠️  PRIVACY RESTRICTED - Profile has name but no experience/education/about');
+    console.warn('[Bright Data] → User likely has strict privacy settings limiting public data');
+  }
+
   // === DIAGNOSTIC LOGGING START ===
   console.log('[Bright Data] ========== RAW API RESPONSE DIAGNOSTIC ==========');
   console.log('[Bright Data] Timestamp:', new Date().toISOString());
+  console.log('[Bright Data] Response type:',
+    hasSnapshotId ? 'STILL_PROCESSING' :
+    hasPrivacyRestriction ? 'PRIVACY_RESTRICTED' :
+    hasProfileData ? 'SUCCESS' : 'UNKNOWN');
   console.log('[Bright Data] Top-level keys:', Object.keys(data).join(', '));
 
   // Log data types for all fields
