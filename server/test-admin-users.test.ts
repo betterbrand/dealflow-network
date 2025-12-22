@@ -181,13 +181,14 @@ describe("Admin User Management (Database-backed)", () => {
 
   describe("Integration scenarios", () => {
     it("should handle add and remove in sequence", async () => {
-      await addAuthorizedUser("temp@example.com");
+      const tempEmail = `temp-seq-${Date.now()}@example.com`;
+      await addAuthorizedUser(tempEmail);
       let users = await listAuthorizedUsers();
-      expect(users).toContain("temp@example.com");
-      
-      await removeAuthorizedUser("temp@example.com");
+      expect(users).toContain(tempEmail);
+
+      await removeAuthorizedUser(tempEmail);
       users = await listAuthorizedUsers();
-      expect(users).not.toContain("temp@example.com");
+      expect(users).not.toContain(tempEmail);
     });
 
     it("should maintain list integrity after multiple operations", async () => {
