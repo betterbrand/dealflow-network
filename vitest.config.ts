@@ -6,5 +6,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["server/**/*.test.ts", "server/**/*.spec.ts"],
+    // Increase timeouts for CI database operations
+    testTimeout: 30000, // 30s per test
+    hookTimeout: 30000, // 30s for beforeAll/afterAll
   },
 });
