@@ -4,7 +4,11 @@ import { contacts } from "../drizzle/schema";
 import { parseQuery } from "./services/query.service";
 import { and, or, like } from "drizzle-orm";
 
-describe("AI Query Feature", () => {
+// Skip AI tests in CI - these are integration tests that call live LLM APIs
+// Run locally with: npm test -- --run server/ai-query.test.ts
+const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
+
+describe.skipIf(isCI)("AI Query Feature", () => {
   let testContactIds: number[] = [];
 
   beforeAll(async () => {
