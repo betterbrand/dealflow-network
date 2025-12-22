@@ -85,13 +85,17 @@ describe("Magic Link Authentication (Database-backed)", () => {
       // Temporarily add a user, generate token, then remove them
       const db = await getDb();
       if (db) {
-        await db.insert(authorizedUsers).values({ email: "temp@example.com" });
-        const token = await generateMagicLinkToken("temp@example.com");
-        
-        // Remove user from database
+        const tempEmail = `temp-${Date.now()}@example.com`;
         const { eq } = await import("drizzle-orm");
-        await db.delete(authorizedUsers).where(eq(authorizedUsers.email, "temp@example.com"));
-        
+        // Cleanup first in case of previous failed run
+        await db.delete(authorizedUsers).where(eq(authorizedUsers.email, tempEmail)).catch(() => {});
+
+        await db.insert(authorizedUsers).values({ email: tempEmail });
+        const token = await generateMagicLinkToken(tempEmail);
+
+        // Remove user from database
+        await db.delete(authorizedUsers).where(eq(authorizedUsers.email, tempEmail));
+
         // Token should now be invalid
         const result = await verifyMagicLinkToken(token);
         expect(result).toBeNull();
@@ -138,13 +142,17 @@ describe("Magic Link Authentication (Database-backed)", () => {
       // Temporarily add a user, generate token, then remove them
       const db = await getDb();
       if (db) {
-        await db.insert(authorizedUsers).values({ email: "temp@example.com" });
-        const token = generateSessionToken("temp@example.com");
-        
-        // Remove user from database
+        const tempEmail = `temp-session-${Date.now()}@example.com`;
         const { eq } = await import("drizzle-orm");
-        await db.delete(authorizedUsers).where(eq(authorizedUsers.email, "temp@example.com"));
-        
+        // Cleanup first in case of previous failed run
+        await db.delete(authorizedUsers).where(eq(authorizedUsers.email, tempEmail)).catch(() => {});
+
+        await db.insert(authorizedUsers).values({ email: tempEmail });
+        const token = generateSessionToken(tempEmail);
+
+        // Remove user from database
+        await db.delete(authorizedUsers).where(eq(authorizedUsers.email, tempEmail));
+
         // Token should now be invalid
         const result = await verifySessionToken(token);
         expect(result).toBeNull();

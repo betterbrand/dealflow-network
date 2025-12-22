@@ -23,6 +23,10 @@ export function CreateContactDialog() {
   const [step, setStep] = useState<ImportStep>("import");
   const [profileUrl, setProfileUrl] = useState("");
   const [isEnriching, setIsEnriching] = useState(false);
+  const [wasEnriched, setWasEnriched] = useState(false); // Track if we already enriched this profile
+  const [enrichedData, setEnrichedData] = useState<any>(null); // Store enriched profile data
+  const [enrichmentStep, setEnrichmentStep] = useState<string>(""); // Current step of enrichment
+  const [enrichmentStartTime, setEnrichmentStartTime] = useState<number>(0); // Track start time
   const [formData, setFormData] = useState({
     name: "",
     company: "",
@@ -38,8 +42,28 @@ export function CreateContactDialog() {
 
   const utils = trpc.useUtils();
   const enrichMutation = trpc.contacts.enrichFromLinkedIn.useMutation();
+  const updateMutation = trpc.contacts.update.useMutation();
   const createMutation = trpc.contacts.create.useMutation({
-    onSuccess: () => {
+    onSuccess: async (result) => {
+      console.log('[CreateContact] onSuccess called with result:', result);
+      console.log('[CreateContact] enrichedData state:', enrichedData);
+
+      // If we have enriched data, save it to the contact
+      if (enrichedData && result.id) {
+        console.log('[CreateContact] Calling update mutation with enriched data for contact', result.id);
+        try {
+          await updateMutation.mutateAsync({
+            id: result.id,
+            ...enrichedData, // Save all enriched fields
+          });
+          console.log('[CreateContact] ✅ Successfully saved enriched data to contact', result.id);
+        } catch (error) {
+          console.error('[CreateContact] ❌ Failed to save enriched data:', error);
+        }
+      } else {
+        console.log('[CreateContact] Skipping enriched data save - enrichedData:', !!enrichedData, 'result.id:', result?.id);
+      }
+
       toast.success("Contact created successfully!");
       utils.contacts.list.invalidate();
       utils.graph.getData.invalidate();
@@ -54,6 +78,8 @@ export function CreateContactDialog() {
     setOpen(false);
     setStep("import");
     setProfileUrl("");
+    setWasEnriched(false);
+    setEnrichedData(null);
     setFormData({
       name: "",
       company: "",
@@ -89,10 +115,13 @@ export function CreateContactDialog() {
       if (isLinkedIn) {
         // Use existing LinkedIn enrichment
         const enriched = await enrichMutation.mutateAsync({ linkedinUrl: profileUrl });
-        
+
+        // Store the complete enriched data for later saving
+        setEnrichedData(enriched);
+
         // Extract company and role from most recent experience
         const latestExperience = enriched.experience?.[0];
-        
+
         setFormData({
           name: enriched.name || "",
           company: latestExperience?.company || "",
@@ -105,7 +134,8 @@ export function CreateContactDialog() {
           twitterUrl: "",
           notes: enriched.summary || "",
         });
-        
+
+        setWasEnriched(true); // Mark that we've enriched this profile
         toast.success("Profile imported successfully!");
         setStep("review");
       } else {
@@ -119,15 +149,25 @@ export function CreateContactDialog() {
         setStep("review");
       }
     } catch (error: any) {
-      toast.error(`Failed to import profile: ${error.message}`);
+      // Don't show error if it was cancelled
+      if (error.message !== 'CANCELLED') {
+        toast.error(`Failed to import profile: ${error.message}`);
+      }
     } finally {
       setIsEnriching(false);
     }
   };
 
+  const handleCancelEnrichment = () => {
+    // Reset the mutation to cancel the ongoing request
+    enrichMutation.reset();
+    setIsEnriching(false);
+    toast.info("Import cancelled");
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.name.trim()) {
       toast.error("Name is required");
       return;
@@ -144,6 +184,7 @@ export function CreateContactDialog() {
       linkedinUrl: formData.linkedinUrl || undefined,
       twitterUrl: formData.twitterUrl || undefined,
       notes: formData.notes || undefined,
+      skipEnrichment: wasEnriched, // Skip background enrichment if we already enriched
     });
   };
 
@@ -210,9 +251,14 @@ export function CreateContactDialog() {
                       <div className="h-full w-3/5 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full animate-pulse" />
                     </div>
 
-                    <p className="text-xs text-blue-600">
-                      Please wait while we retrieve work history, education, and profile details...
-                    </p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-blue-600">
+                        Please wait while we retrieve work history, education, and profile details...
+                      </p>
+                      <p className="text-xs text-blue-500 font-medium">
+                        Click "Cancel Import" below to stop
+                      </p>
+                    </div>
                   </div>
                 )}
 
@@ -239,22 +285,33 @@ export function CreateContactDialog() {
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={resetDialog}>
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleImport} 
-                disabled={isEnriching || !profileUrl.trim()}
-              >
-                {isEnriching ? (
-                  <>
+              {isEnriching ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={handleCancelEnrichment}
+                  >
+                    Cancel Import
+                  </Button>
+                  <Button disabled>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Importing...
-                  </>
-                ) : (
-                  "Import Profile"
-                )}
-              </Button>
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button type="button" variant="outline" onClick={resetDialog}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleImport}
+                    disabled={!profileUrl.trim()}
+                  >
+                    Import Profile
+                  </Button>
+                </>
+              )}
             </DialogFooter>
           </>
         ) : (

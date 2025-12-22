@@ -207,6 +207,7 @@ export const appRouter = router({
         interestLevel: z.string().optional(),
         eventId: z.number().optional(),
         companyId: z.number().optional(),
+        skipEnrichment: z.boolean().optional(), // NEW: Skip background enrichment if already enriched
       }))
       .mutation(async ({ input, ctx }) => {
         const { createOrLinkContact } = await import("./db-collaborative");
@@ -266,11 +267,15 @@ export const appRouter = router({
             });
           }
           await db.insert(socialProfiles).values(profiles);
-          
-          // Start background enrichment
-          enrichContactBackground(contactId, profiles).catch(err => {
-            console.error("Background enrichment failed:", err);
-          });
+
+          // Start background enrichment (unless skipEnrichment is true)
+          if (!input.skipEnrichment) {
+            enrichContactBackground(contactId, profiles).catch(err => {
+              console.error("Background enrichment failed:", err);
+            });
+          } else {
+            console.log(`[contacts.create] Skipping background enrichment for contact ${contactId} (already enriched)`);
+          }
         }
         
         return { id: contactId };

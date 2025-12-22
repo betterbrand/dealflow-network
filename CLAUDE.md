@@ -263,6 +263,13 @@ Background jobs fetch LinkedIn/Twitter data to populate: `experience`, `educatio
 
 ## Key Conventions
 
+### Naming Conventions
+
+- **Never use "claude" in branch names, file names, or identifiers.** Use descriptive names based on the feature or purpose (e.g., `feature/linkedin-enrichment` not `claude/review-xyz`).
+- **Never add Claude as a co-author or contributor.** Do not include `Co-Authored-By: Claude` or any similar attribution in commit messages. Do not include "Generated with Claude Code" footers in PRs or commits.
+- Branch names should follow the pattern: `feature/description`, `fix/description`, `refactor/description`
+- Test data should use generic names, not specific identifiers that could break in CI
+
 ### UI Components
 
 All Radix UI primitives wrapped in `client/src/components/ui/` with Tailwind styling using class-variance-authority pattern.
