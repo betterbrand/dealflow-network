@@ -34,7 +34,12 @@ jobs:
     
     - name: Run TypeScript type checking
       run: pnpm exec tsc --noEmit
-    
+
+    - name: Sync database schema
+      run: pnpm run db:push
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
     - name: Run tests
       run: pnpm test
       env:
