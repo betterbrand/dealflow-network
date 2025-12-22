@@ -52,11 +52,15 @@ export default function SemanticGraph() {
     undefined,
     {
       enabled: !!user,
-      onSuccess: (data) => {
-        console.log('[SemanticGraph] Query result:', data);
-      }
     }
   );
+
+  // Log query results when data changes
+  useEffect(() => {
+    if (allEntities) {
+      console.log('[SemanticGraph] Query result:', allEntities);
+    }
+  }, [allEntities]);
 
   const { data: stats } = trpc.semanticGraph.stats.useQuery(
     undefined,
