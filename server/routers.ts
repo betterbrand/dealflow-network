@@ -168,6 +168,13 @@ export const appRouter = router({
         console.log('[enrichFromLinkedIn] Starting enrichment for:', input.linkedinUrl);
         const enriched = await enrichLinkedInProfile(input.linkedinUrl);
         console.log('[enrichFromLinkedIn] Enrichment complete, RDF store updated');
+        console.log('[enrichFromLinkedIn] Company fields in enriched data:', {
+          currentCompanyName: enriched.currentCompanyName,
+          currentCompany: enriched.currentCompany,
+          hasExperience: !!enriched.experience,
+          experienceLength: Array.isArray(enriched.experience) ? enriched.experience.length : 'null/undefined',
+          firstExperienceCompany: enriched.experience?.[0]?.company,
+        });
 
         // Auto-create company if one exists in the enriched data
         try {
@@ -186,6 +193,8 @@ export const appRouter = router({
           // Continue without company - don't fail the whole enrichment
         }
 
+        console.log('[enrichFromLinkedIn] Returning to frontend with currentCompanyName:', enriched.currentCompanyName);
+        console.log('[enrichFromLinkedIn] Full enriched keys:', Object.keys(enriched).sort().join(', '));
         return enriched;
       }),
     
@@ -300,16 +309,112 @@ export const appRouter = router({
         interestLevel: z.string().optional(),
         eventId: z.number().optional(),
         companyId: z.number().optional(),
+
+        // Enriched fields from BrightData
+        summary: z.string().optional(),
+        profilePictureUrl: z.string().optional(),
+        experience: z.any().optional(),
+        education: z.any().optional(),
+        skills: z.any().optional(),
+        followers: z.number().optional(),
+        connections: z.number().optional(),
+        bannerImage: z.string().optional(),
+        firstName: z.string().optional(),
+        lastName: z.string().optional(),
+        bioLinks: z.any().optional(),
+        posts: z.any().optional(),
+        activity: z.any().optional(),
+        peopleAlsoViewed: z.any().optional(),
+        linkedinId: z.string().optional(),
+        linkedinNumId: z.string().optional(),
+        city: z.string().optional(),
+        countryCode: z.string().optional(),
+        educationDetails: z.string().optional(),
+        honorsAndAwards: z.any().optional(),
+        memorializedAccount: z.boolean().optional(),
       }))
       .mutation(async ({ input }) => {
-        const { updateContact, getContactById } = await import("./db");
+        const { updateContact, getContactById, updateContactEnrichment } = await import("./db");
         const { getDb } = await import("./db");
         const { socialProfiles } = await import("../drizzle/schema");
         const { enrichContactBackground } = await import("./enrichment");
         const { getOrCreateCompanyForContact } = await import("./db-company-auto-create");
         const { eq, and } = await import("drizzle-orm");
 
-        const { id, linkedinUrl, twitterUrl, ...data } = input;
+        const {
+          id,
+          linkedinUrl,
+          twitterUrl,
+          // Extract enriched fields
+          summary,
+          profilePictureUrl,
+          experience,
+          education,
+          skills,
+          followers,
+          connections,
+          bannerImage,
+          firstName,
+          lastName,
+          bioLinks,
+          posts,
+          activity,
+          peopleAlsoViewed,
+          linkedinId,
+          linkedinNumId,
+          city,
+          countryCode,
+          educationDetails,
+          honorsAndAwards,
+          memorializedAccount,
+          ...data
+        } = input;
+
+        // Save enriched data if provided
+        const hasEnrichedData = summary || profilePictureUrl || experience || education ||
+                                skills || followers !== undefined || connections !== undefined || bannerImage ||
+                                firstName || lastName || bioLinks || posts || activity ||
+                                peopleAlsoViewed || linkedinId || linkedinNumId ||
+                                city || countryCode || educationDetails || honorsAndAwards;
+
+        if (hasEnrichedData) {
+          const enrichedData = {
+            summary,
+            profilePictureUrl,
+            experience,
+            education,
+            skills,
+            followers,
+            connections,
+            bannerImageUrl: bannerImage,
+            firstName,
+            lastName,
+            bioLinks,
+            posts,
+            activity,
+            peopleAlsoViewed,
+            linkedinId,
+            linkedinNumId,
+            city,
+            countryCode,
+            educationDetails,
+            honorsAndAwards,
+            memorializedAccount,
+          };
+
+          console.log('[contacts.update] Saving enriched data for contact', id);
+          console.log('[contacts.update] Enriched fields:', {
+            hasExperience: !!experience,
+            hasEducation: !!education,
+            hasSkills: !!skills,
+            followers,
+            connections,
+            hasPosts: !!posts,
+            hasBioLinks: !!bioLinks,
+          });
+
+          await updateContactEnrichment(id, enrichedData);
+        }
 
         // Auto-create company if company name is being updated and no explicit companyId provided
         if (!data.companyId && data.company) {

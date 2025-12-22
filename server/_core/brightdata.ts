@@ -441,7 +441,7 @@ function transformBrightDataResponse(data: any): BrightDataLinkedInProfile {
     });
   }
 
-  const skills = Array.isArray(data.skills) ? data.skills : (data.languages || []).map((lang: any) => lang.name || lang);
+  const skills = Array.isArray(data.skills) ? data.skills : (data.languages || []).map((lang: any) => lang.name || lang.title || (typeof lang === 'string' ? lang : ''));
   if (!Array.isArray(data.skills) && data.languages) {
     fallbacksUsed.push('skills->languages');
   }

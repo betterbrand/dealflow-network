@@ -47,10 +47,20 @@ export function CreateContactDialog() {
     onSuccess: async (result) => {
       console.log('[CreateContact] onSuccess called with result:', result);
       console.log('[CreateContact] enrichedData state:', enrichedData);
+      console.log('[CreateContact] enrichedData keys:', enrichedData ? Object.keys(enrichedData) : 'null');
+      console.log('[CreateContact] result type:', typeof result, 'has id?', 'id' in (result || {}));
 
       // If we have enriched data, save it to the contact
-      if (enrichedData && result.id) {
+      if (enrichedData && result?.id) {
         console.log('[CreateContact] Calling update mutation with enriched data for contact', result.id);
+        console.log('[CreateContact] Enriched fields being sent:', {
+          hasExperience: !!enrichedData.experience,
+          hasEducation: !!enrichedData.education,
+          followers: enrichedData.followers,
+          connections: enrichedData.connections,
+          hasPosts: !!enrichedData.posts,
+          hasActivity: !!enrichedData.activity,
+        });
         try {
           await updateMutation.mutateAsync({
             id: result.id,
@@ -59,9 +69,10 @@ export function CreateContactDialog() {
           console.log('[CreateContact] ✅ Successfully saved enriched data to contact', result.id);
         } catch (error) {
           console.error('[CreateContact] ❌ Failed to save enriched data:', error);
+          toast.error(`Failed to save enriched data: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       } else {
-        console.log('[CreateContact] Skipping enriched data save - enrichedData:', !!enrichedData, 'result.id:', result?.id);
+        console.log('[CreateContact] Skipping enriched data save - enrichedData:', !!enrichedData, 'result:', result, 'result.id:', result?.id);
       }
 
       toast.success("Contact created successfully!");
@@ -116,16 +127,28 @@ export function CreateContactDialog() {
         // Use existing LinkedIn enrichment
         const enriched = await enrichMutation.mutateAsync({ linkedinUrl: profileUrl });
 
+        console.log('[CreateContactDialog] Received enriched data from backend');
+        console.log('[CreateContactDialog] enriched.currentCompanyName:', enriched.currentCompanyName);
+        console.log('[CreateContactDialog] enriched.currentCompany:', enriched.currentCompany);
+        console.log('[CreateContactDialog] enriched.experience:', enriched.experience);
+        console.log('[CreateContactDialog] All enriched keys:', Object.keys(enriched).sort().join(', '));
+
         // Store the complete enriched data for later saving
         setEnrichedData(enriched);
 
-        // Extract company and role from most recent experience
+        // Extract company and role from most recent experience, with fallback to current company
         const latestExperience = enriched.experience?.[0];
+        console.log('[CreateContactDialog] latestExperience:', latestExperience);
+        console.log('[CreateContactDialog] Fallback chain for company:', {
+          latestExperienceCompany: latestExperience?.company,
+          currentCompanyName: enriched.currentCompanyName,
+          result: latestExperience?.company || enriched.currentCompanyName || "",
+        });
 
         setFormData({
           name: enriched.name || "",
-          company: latestExperience?.company || "",
-          role: latestExperience?.title || enriched.headline || "",
+          company: latestExperience?.company || enriched.currentCompanyName || "",
+          role: latestExperience?.title || enriched.headline || enriched.position || "",
           email: "",
           phone: "",
           location: enriched.location || "",
@@ -322,6 +345,19 @@ export function CreateContactDialog() {
                 Review the imported information and make any necessary edits.
               </DialogDescription>
             </DialogHeader>
+
+            {/* Raw BrightData Response */}
+            {enrichedData && (
+              <details className="mb-4 p-4 bg-gray-50 rounded-lg border">
+                <summary className="cursor-pointer font-semibold text-sm mb-2">
+                  Raw BrightData Response (Click to expand)
+                </summary>
+                <pre className="text-xs overflow-auto max-h-96 mt-2 p-2 bg-white rounded border">
+                  {JSON.stringify(enrichedData, null, 2)}
+                </pre>
+              </details>
+            )}
+
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <Label htmlFor="name">
