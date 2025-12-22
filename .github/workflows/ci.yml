@@ -35,8 +35,46 @@ jobs:
     - name: Run TypeScript type checking
       run: pnpm exec tsc --noEmit
 
-    - name: Sync database schema
-      run: pnpm exec drizzle-kit push --force
+    - name: Sync database schema (add new columns)
+      run: |
+        # Extract DB connection info from DATABASE_URL
+        # Run ALTER TABLE statements - ignore errors if columns already exist
+        node -e "
+          const mysql = require('mysql2/promise');
+          const url = new URL(process.env.DATABASE_URL);
+          async function run() {
+            const conn = await mysql.createConnection({
+              host: url.hostname,
+              port: url.port || 3306,
+              user: url.username,
+              password: url.password,
+              database: url.pathname.slice(1),
+              ssl: { rejectUnauthorized: false }
+            });
+            const columns = [
+              'followers int', 'connections int', 'bannerImageUrl text',
+              'firstName varchar(100)', 'lastName varchar(100)', 'bioLinks text',
+              'posts text', 'activity text', 'peopleAlsoViewed text',
+              'linkedinId varchar(100)', 'linkedinNumId varchar(100)',
+              'city varchar(255)', 'countryCode varchar(10)',
+              'memorializedAccount int DEFAULT 0', 'educationDetails text',
+              'honorsAndAwards text', 'lastEnrichedAt timestamp',
+              'enrichmentSource varchar(50)'
+            ];
+            for (const col of columns) {
+              const name = col.split(' ')[0];
+              try {
+                await conn.execute('ALTER TABLE contacts ADD ' + col);
+                console.log('Added column:', name);
+              } catch (e) {
+                if (e.code === 'ER_DUP_FIELDNAME') console.log('Column exists:', name);
+                else throw e;
+              }
+            }
+            await conn.end();
+          }
+          run().catch(e => { console.error(e); process.exit(1); });
+        "
       env:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
