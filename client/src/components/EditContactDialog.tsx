@@ -51,7 +51,8 @@ export function EditContactDialog({
       onSuccess?.();
     },
     onError: (error) => {
-      toast.error(`Failed to update contact: ${error.message}`);
+      const errorMessage = typeof error.message === 'string' ? error.message : JSON.stringify(error.message);
+      toast.error(`Failed to update contact: ${errorMessage}`);
     },
   });
 

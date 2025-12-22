@@ -23,7 +23,8 @@ export default function EmailGateLogin() {
       setLocation("/");
     },
     onError: (error: any) => {
-      toast.error(error.message || "Failed to continue");
+      const errorMessage = typeof error.message === 'string' ? error.message : JSON.stringify(error.message);
+      toast.error(errorMessage || "Failed to continue");
       setLoading(false);
     },
   });

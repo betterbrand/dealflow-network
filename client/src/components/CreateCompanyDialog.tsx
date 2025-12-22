@@ -65,7 +65,8 @@ export function CreateCompanyDialog({
       });
     },
     onError: (error) => {
-      toast.error("Failed to create company: " + error.message);
+      const errorMessage = typeof error.message === 'string' ? error.message : JSON.stringify(error.message);
+      toast.error("Failed to create company: " + errorMessage);
     },
   });
 

@@ -64,7 +64,8 @@ export function AddRelationshipDialog({
       onSuccess?.();
     },
     onError: (error) => {
-      toast.error(`Failed to create relationship: ${error.message}`);
+      const errorMessage = typeof error.message === 'string' ? error.message : JSON.stringify(error.message);
+      toast.error(`Failed to create relationship: ${errorMessage}`);
     },
   });
 
