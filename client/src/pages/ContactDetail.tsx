@@ -1,7 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Mail, Phone, MapPin, Building2, Calendar, User, Linkedin, Twitter, Plus, ExternalLink, Briefcase, GraduationCap } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, Building2, Calendar, User, Linkedin, Twitter, Plus, ExternalLink, Briefcase, GraduationCap, FileText, Users } from "lucide-react";
 import { Link, useParams, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -23,6 +23,10 @@ export default function ContactDetail() {
   const experience = contact?.experience ? JSON.parse(contact.experience) : [];
   const education = contact?.education ? JSON.parse(contact.education) : [];
   const skills = contact?.skills ? JSON.parse(contact.skills) : [];
+  const bioLinks = contact?.bioLinks ? JSON.parse(contact.bioLinks) : [];
+  const posts = contact?.posts ? JSON.parse(contact.posts) : [];
+  const activity = contact?.activity ? JSON.parse(contact.activity) : [];
+  const peopleAlsoViewed = contact?.peopleAlsoViewed ? JSON.parse(contact.peopleAlsoViewed) : [];
 
   if (isLoading) {
     return (
@@ -91,21 +95,53 @@ export default function ContactDetail() {
         <div className="md:col-span-2 space-y-6">
           {/* Basic Info Card */}
           <Card>
+            {/* Banner Image */}
+            {contact.bannerImageUrl && (
+              <div className="relative w-full h-32 bg-gradient-to-r from-blue-500 to-purple-600">
+                <img
+                  src={contact.bannerImageUrl}
+                  alt={`${contact.name} banner`}
+                  className="w-full h-32 object-cover"
+                />
+              </div>
+            )}
             <CardHeader>
               <div className="flex items-start justify-between">
-                <div>
-                  <CardTitle className="text-2xl">{contact.name}</CardTitle>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <CardTitle className="text-2xl">{contact.name}</CardTitle>
+                    {(contact.followers || contact.connections) && (
+                      <div className="flex gap-3 text-xs text-muted-foreground">
+                        {contact.followers && (
+                          <span>{contact.followers.toLocaleString()} followers</span>
+                        )}
+                        {contact.connections && (
+                          <span>{contact.connections.toLocaleString()} connections</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <CardDescription>
                     {contact.role && contact.company && `${contact.role} at ${contact.company}`}
                     {contact.role && !contact.company && contact.role}
                     {!contact.role && contact.company && contact.company}
                   </CardDescription>
+                  {(contact.city || contact.countryCode) && (
+                    <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                      <MapPin className="h-3 w-3" />
+                      <span>
+                        {contact.city && contact.countryCode && `${contact.city}, ${contact.countryCode}`}
+                        {contact.city && !contact.countryCode && contact.city}
+                        {!contact.city && contact.countryCode && contact.countryCode}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 {contact.profilePictureUrl && (
-                  <img 
-                    src={contact.profilePictureUrl} 
+                  <img
+                    src={contact.profilePictureUrl}
                     alt={contact.name}
-                    className="w-16 h-16 rounded-full object-cover"
+                    className="w-16 h-16 rounded-full object-cover border-2 border-background -mt-8"
                   />
                 )}
               </div>
@@ -169,6 +205,26 @@ export default function ContactDetail() {
                 </>
               )}
 
+              {/* Bio Links */}
+              {bioLinks && bioLinks.length > 0 && (
+                <>
+                  <Separator />
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Links</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {bioLinks.map((link: any, index: number) => (
+                        <Button key={index} variant="outline" size="sm" asChild>
+                          <a href={link.link} target="_blank" rel="noopener noreferrer">
+                            {link.title || link.link}
+                            <ExternalLink className="h-3 w-3 ml-1" />
+                          </a>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
               {/* Summary/Headline */}
               {contact.summary && (
                 <>
@@ -194,17 +250,26 @@ export default function ContactDetail() {
               <CardContent className="space-y-4">
                 {experience.map((exp: any, index: number) => (
                   <div key={index} className="space-y-1">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h4 className="font-medium">{exp.title}</h4>
-                        <p className="text-sm text-muted-foreground">{exp.company}</p>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 flex-1">
+                        {exp.companyLogoUrl && (
+                          <img
+                            src={exp.companyLogoUrl}
+                            alt={exp.company}
+                            className="w-12 h-12 rounded object-contain bg-gray-50"
+                          />
+                        )}
+                        <div className="flex-1">
+                          <h4 className="font-medium">{exp.title}</h4>
+                          <p className="text-sm text-muted-foreground">{exp.company}</p>
+                        </div>
                       </div>
                       <span className="text-xs text-muted-foreground whitespace-nowrap">
                         {exp.startDate} - {exp.endDate || 'Present'}
                       </span>
                     </div>
                     {exp.description && (
-                      <p className="text-sm text-muted-foreground">{exp.description}</p>
+                      <p className="text-sm text-muted-foreground ml-15">{exp.description}</p>
                     )}
                     {index < experience.length - 1 && <Separator className="mt-4" />}
                   </div>
@@ -225,12 +290,21 @@ export default function ContactDetail() {
               <CardContent className="space-y-4">
                 {education.map((edu: any, index: number) => (
                   <div key={index} className="space-y-1">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h4 className="font-medium">{edu.school}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          {edu.degree} {edu.fieldOfStudy && `in ${edu.fieldOfStudy}`}
-                        </p>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 flex-1">
+                        {edu.instituteLogoUrl && (
+                          <img
+                            src={edu.instituteLogoUrl}
+                            alt={edu.school}
+                            className="w-12 h-12 rounded object-contain bg-gray-50"
+                          />
+                        )}
+                        <div className="flex-1">
+                          <h4 className="font-medium">{edu.school}</h4>
+                          <p className="text-sm text-muted-foreground">
+                            {edu.degree} {edu.fieldOfStudy && `in ${edu.fieldOfStudy}`}
+                          </p>
+                        </div>
                       </div>
                       <span className="text-xs text-muted-foreground whitespace-nowrap">
                         {edu.startDate} - {edu.endDate || 'Present'}
@@ -255,6 +329,83 @@ export default function ContactDetail() {
                     <Badge key={index} variant="secondary">{skill}</Badge>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Recent Posts & Activity */}
+          {posts && posts.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Recent Posts
+                </CardTitle>
+                <CardDescription>Latest activity on LinkedIn</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {posts.slice(0, 5).map((post: any, index: number) => (
+                  <div key={index} className="space-y-2">
+                    {post.text && (
+                      <p className="text-sm line-clamp-3">{post.text}</p>
+                    )}
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      {post.date && (
+                        <span>{new Date(post.date).toLocaleDateString()}</span>
+                      )}
+                      {post.likes && <span>{post.likes} likes</span>}
+                      {post.comments && <span>{post.comments} comments</span>}
+                    </div>
+                    {post.url && (
+                      <Button variant="ghost" size="sm" asChild>
+                        <a href={post.url} target="_blank" rel="noopener noreferrer">
+                          View Post
+                          <ExternalLink className="h-3 w-3 ml-1" />
+                        </a>
+                      </Button>
+                    )}
+                    {index < Math.min(posts.length, 5) - 1 && <Separator />}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* People Also Viewed - Network Suggestions */}
+          {peopleAlsoViewed && peopleAlsoViewed.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  People Also Viewed
+                </CardTitle>
+                <CardDescription>Potential connections in their network</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {peopleAlsoViewed.slice(0, 6).map((person: any, index: number) => (
+                  <div key={index} className="flex items-center gap-3 p-2 border rounded-lg hover:bg-accent/50 transition-colors">
+                    {person.profilePicture && (
+                      <img
+                        src={person.profilePicture}
+                        alt={person.name}
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{person.name}</p>
+                      {person.headline && (
+                        <p className="text-xs text-muted-foreground truncate">{person.headline}</p>
+                      )}
+                    </div>
+                    {person.profileLink && (
+                      <Button variant="ghost" size="sm" asChild>
+                        <a href={person.profileLink} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                ))}
               </CardContent>
             </Card>
           )}

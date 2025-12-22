@@ -186,7 +186,27 @@ export async function getUserContacts(userId: number) {
       createdBy: contacts.createdBy,
       createdAt: contacts.createdAt,
       updatedAt: contacts.updatedAt,
-      
+
+      // Enrichment fields
+      followers: contacts.followers,
+      connections: contacts.connections,
+      bannerImageUrl: contacts.bannerImageUrl,
+      firstName: contacts.firstName,
+      lastName: contacts.lastName,
+      bioLinks: contacts.bioLinks,
+      posts: contacts.posts,
+      activity: contacts.activity,
+      peopleAlsoViewed: contacts.peopleAlsoViewed,
+      linkedinId: contacts.linkedinId,
+      linkedinNumId: contacts.linkedinNumId,
+      city: contacts.city,
+      countryCode: contacts.countryCode,
+      memorializedAccount: contacts.memorializedAccount,
+      educationDetails: contacts.educationDetails,
+      honorsAndAwards: contacts.honorsAndAwards,
+      lastEnrichedAt: contacts.lastEnrichedAt,
+      enrichmentSource: contacts.enrichmentSource,
+
       // User-specific fields
       userContactId: userContacts.id,
       privateNotes: userContacts.privateNotes,
@@ -238,7 +258,27 @@ export async function getUserContact(userId: number, contactId: number) {
       createdBy: contacts.createdBy,
       createdAt: contacts.createdAt,
       updatedAt: contacts.updatedAt,
-      
+
+      // Enrichment fields
+      followers: contacts.followers,
+      connections: contacts.connections,
+      bannerImageUrl: contacts.bannerImageUrl,
+      firstName: contacts.firstName,
+      lastName: contacts.lastName,
+      bioLinks: contacts.bioLinks,
+      posts: contacts.posts,
+      activity: contacts.activity,
+      peopleAlsoViewed: contacts.peopleAlsoViewed,
+      linkedinId: contacts.linkedinId,
+      linkedinNumId: contacts.linkedinNumId,
+      city: contacts.city,
+      countryCode: contacts.countryCode,
+      memorializedAccount: contacts.memorializedAccount,
+      educationDetails: contacts.educationDetails,
+      honorsAndAwards: contacts.honorsAndAwards,
+      lastEnrichedAt: contacts.lastEnrichedAt,
+      enrichmentSource: contacts.enrichmentSource,
+
       // User-specific fields
       userContactId: userContacts.id,
       privateNotes: userContacts.privateNotes,
