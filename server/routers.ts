@@ -184,6 +184,15 @@ export const appRouter = router({
         console.log('[getImportPreview] Fetching preview using', provider, 'for:', input.linkedinUrl);
         const imported = await importLinkedInProfile(input.linkedinUrl, { provider });
 
+        // Validate that we got meaningful data
+        const hasName = !!(imported.name || imported.firstName || imported.lastName);
+        const hasHeadline = !!imported.headline;
+        const hasExperience = Array.isArray(imported.experience) && imported.experience.length > 0 && imported.experience.some((e: any) => e.company || e.title);
+
+        if (!hasName && !hasHeadline && !hasExperience) {
+          throw new Error("Profile not found or has no public data. Please check the LinkedIn URL is correct and the profile is publicly visible.");
+        }
+
         // Return preview data (without saving to DB)
         return {
           // Preview fields
