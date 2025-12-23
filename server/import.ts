@@ -12,7 +12,7 @@ import {
   type ImportedProfile,
   type ImportOptions,
 } from "./import-adapter";
-import { updateContactEnrichment } from "./db";
+import { updateContactImport } from "./db";
 import type { LinkedInProvider } from "./_core/linkedin-provider";
 
 // Re-export types for convenience
@@ -149,7 +149,7 @@ export async function importContactBackground(
     }
 
     // Update the contact in the database with imported data
-    await updateContactEnrichment(contactId, {
+    await updateContactImport(contactId, {
       // Core fields
       summary: importedData.summary,
       profilePictureUrl: importedData.profilePictureUrl,

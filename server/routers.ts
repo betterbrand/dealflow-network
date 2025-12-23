@@ -210,6 +210,7 @@ export const appRouter = router({
         importData: z.any(), // The _rawData from preview
         importCompany: z.boolean().optional(),
         provider: z.enum(['brightdata', 'scrapingdog']),
+        linkedinUrl: z.string().optional(), // Save the URL used for import
       }))
       .mutation(async ({ input }) => {
         const { updateContactEnrichment, getDb } = await import("./db");
@@ -219,6 +220,7 @@ export const appRouter = router({
 
         const data = input.importData;
         console.log('[confirmImport] Saving imported data for contact:', input.contactId);
+        console.log('[confirmImport] LinkedIn URL:', input.linkedinUrl);
 
         // Extract company and role
         let company = data.experience?.[0]?.company || data.currentCompanyName;
@@ -268,14 +270,19 @@ export const appRouter = router({
           honorsAndAwards: data.honorsAndAwards,
         });
 
-        // Update import status
+        // Update import status and linkedinUrl
         const db = await getDb();
         if (db) {
+          const updateData: Record<string, any> = {
+            importStatus: 'complete',
+            importSource: input.provider,
+          };
+          // Save linkedinUrl if provided and not already set
+          if (input.linkedinUrl) {
+            updateData.linkedinUrl = input.linkedinUrl;
+          }
           await db.update(contacts)
-            .set({
-              importStatus: 'complete',
-              importSource: input.provider,
-            })
+            .set(updateData)
             .where(eq(contacts.id, input.contactId));
         }
 

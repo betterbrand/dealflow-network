@@ -252,8 +252,8 @@ export async function createCompany(data: InsertCompany) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const result = await db.insert(companies).values(data);
-  return Number(result.insertId);
+  const [company] = await db.insert(companies).values(data).$returningId();
+  return company.id;
 }
 
 export async function getCompanyById(id: number) {
@@ -490,11 +490,11 @@ export async function deleteRelationship(id: number) {
 
 
 /**
- * Update contact with enriched data from LinkedIn/Twitter
+ * Update contact with imported data from LinkedIn/Twitter
  */
-export async function updateContactEnrichment(
+export async function updateContactImport(
   contactId: number,
-  enrichedData: {
+  importedData: {
     // Core fields (existing)
     summary?: string;
     profilePictureUrl?: string;
@@ -538,7 +538,7 @@ export async function updateContactEnrichment(
 ): Promise<void> {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot update contact enrichment: database not available");
+    console.warn("[Database] Cannot update contact import: database not available");
     return;
   }
 
@@ -546,44 +546,44 @@ export async function updateContactEnrichment(
     const updateData: Record<string, any> = {};
 
     // Existing fields
-    if (enrichedData.summary) updateData.summary = enrichedData.summary;
-    if (enrichedData.profilePictureUrl) updateData.profilePictureUrl = enrichedData.profilePictureUrl;
-    if (enrichedData.experience) updateData.experience = JSON.stringify(enrichedData.experience);
-    if (enrichedData.education) updateData.education = JSON.stringify(enrichedData.education);
-    if (enrichedData.skills) updateData.skills = JSON.stringify(enrichedData.skills);
-    if (enrichedData.company) updateData.company = enrichedData.company;
-    if (enrichedData.role) updateData.role = enrichedData.role;
-    if (enrichedData.location) updateData.location = enrichedData.location;
+    if (importedData.summary) updateData.summary = importedData.summary;
+    if (importedData.profilePictureUrl) updateData.profilePictureUrl = importedData.profilePictureUrl;
+    if (importedData.experience) updateData.experience = JSON.stringify(importedData.experience);
+    if (importedData.education) updateData.education = JSON.stringify(importedData.education);
+    if (importedData.skills) updateData.skills = JSON.stringify(importedData.skills);
+    if (importedData.company) updateData.company = importedData.company;
+    if (importedData.role) updateData.role = importedData.role;
+    if (importedData.location) updateData.location = importedData.location;
 
     // === Step 1: Social Proof ===
-    if (enrichedData.followers !== undefined) updateData.followers = enrichedData.followers;
-    if (enrichedData.connections !== undefined) updateData.connections = enrichedData.connections;
+    if (importedData.followers !== undefined) updateData.followers = importedData.followers;
+    if (importedData.connections !== undefined) updateData.connections = importedData.connections;
 
     // === Step 2: Visual Assets ===
-    if (enrichedData.bannerImageUrl) updateData.bannerImageUrl = enrichedData.bannerImageUrl;
+    if (importedData.bannerImageUrl) updateData.bannerImageUrl = importedData.bannerImageUrl;
 
     // === Step 3: Name Parsing ===
-    if (enrichedData.firstName) updateData.firstName = enrichedData.firstName;
-    if (enrichedData.lastName) updateData.lastName = enrichedData.lastName;
+    if (importedData.firstName) updateData.firstName = importedData.firstName;
+    if (importedData.lastName) updateData.lastName = importedData.lastName;
 
     // === Step 4: External Links ===
-    if (enrichedData.bioLinks) updateData.bioLinks = JSON.stringify(enrichedData.bioLinks);
+    if (importedData.bioLinks) updateData.bioLinks = JSON.stringify(importedData.bioLinks);
 
     // === Step 5: Content & Activity ===
-    if (enrichedData.posts) updateData.posts = JSON.stringify(enrichedData.posts);
-    if (enrichedData.activity) updateData.activity = JSON.stringify(enrichedData.activity);
+    if (importedData.posts) updateData.posts = JSON.stringify(importedData.posts);
+    if (importedData.activity) updateData.activity = JSON.stringify(importedData.activity);
 
     // === Step 6: Network ===
-    if (enrichedData.peopleAlsoViewed) updateData.peopleAlsoViewed = JSON.stringify(enrichedData.peopleAlsoViewed);
+    if (importedData.peopleAlsoViewed) updateData.peopleAlsoViewed = JSON.stringify(importedData.peopleAlsoViewed);
 
     // === Additional Metadata ===
-    if (enrichedData.linkedinId) updateData.linkedinId = enrichedData.linkedinId;
-    if (enrichedData.linkedinNumId) updateData.linkedinNumId = enrichedData.linkedinNumId;
-    if (enrichedData.city) updateData.city = enrichedData.city;
-    if (enrichedData.countryCode) updateData.countryCode = enrichedData.countryCode;
-    if (enrichedData.memorializedAccount !== undefined) updateData.memorializedAccount = enrichedData.memorializedAccount ? 1 : 0;
-    if (enrichedData.educationDetails) updateData.educationDetails = enrichedData.educationDetails;
-    if (enrichedData.honorsAndAwards) updateData.honorsAndAwards = JSON.stringify(enrichedData.honorsAndAwards);
+    if (importedData.linkedinId) updateData.linkedinId = importedData.linkedinId;
+    if (importedData.linkedinNumId) updateData.linkedinNumId = importedData.linkedinNumId;
+    if (importedData.city) updateData.city = importedData.city;
+    if (importedData.countryCode) updateData.countryCode = importedData.countryCode;
+    if (importedData.memorializedAccount !== undefined) updateData.memorializedAccount = importedData.memorializedAccount ? 1 : 0;
+    if (importedData.educationDetails) updateData.educationDetails = importedData.educationDetails;
+    if (importedData.honorsAndAwards) updateData.honorsAndAwards = JSON.stringify(importedData.honorsAndAwards);
 
     // Import metadata
     updateData.lastImportedAt = new Date();
@@ -594,12 +594,22 @@ export async function updateContactEnrichment(
         .set(updateData)
         .where(eq(contacts.id, contactId));
 
-      console.log(`[Database] Updated contact ${contactId} with enriched data`);
-      console.log(`[Database] Saved company: ${enrichedData.company || 'none'}, role: ${enrichedData.role || 'none'}`);
-      console.log(`[Database] Saved ${enrichedData.followers || 0} followers, ${enrichedData.posts?.length || 0} posts, ${enrichedData.peopleAlsoViewed?.length || 0} network suggestions`);
+      console.log(`[Database] Updated contact ${contactId} with imported data`);
+      console.log(`[Database] Saved company: ${importedData.company || 'none'}, role: ${importedData.role || 'none'}`);
+      console.log(`[Database] Saved ${importedData.followers || 0} followers, ${importedData.posts?.length || 0} posts, ${importedData.peopleAlsoViewed?.length || 0} network suggestions`);
     }
   } catch (error) {
-    console.error(`[Database] Failed to update contact enrichment:`, error);
+    console.error(`[Database] Failed to update contact import:`, error);
     throw error;
   }
+}
+
+/**
+ * @deprecated Use updateContactImport instead
+ */
+export async function updateContactEnrichment(
+  contactId: number,
+  importedData: Parameters<typeof updateContactImport>[1]
+) {
+  return updateContactImport(contactId, importedData);
 }

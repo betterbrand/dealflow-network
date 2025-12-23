@@ -173,7 +173,7 @@ export async function fetchLinkedInProfileScrapingdog(
   }
 
   const linkedinId = extractLinkedInId(profileUrl);
-  const apiUrl = `https://api.scrapingdog.com/linkedin?api_key=${ENV.scrapingdogApiKey}&type=profile&linkId=${encodeURIComponent(linkedinId)}`;
+  const apiUrl = `https://api.scrapingdog.com/linkedin?api_key=${ENV.scrapingdogApiKey}&type=profile&linkId=${encodeURIComponent(linkedinId)}&premium=true`;
 
   console.log(`[Scrapingdog] Fetching profile: ${profileUrl}`);
   console.log(`[Scrapingdog] LinkedIn ID: ${linkedinId}`);
@@ -198,10 +198,17 @@ export async function fetchLinkedInProfileScrapingdog(
     );
   }
 
-  const data = await response.json();
+  const rawData = await response.json();
+
+  // Scrapingdog returns an array with the profile as first element
+  const data = Array.isArray(rawData) ? rawData[0] : rawData;
 
   // Log raw response for debugging
-  console.log(`[Scrapingdog] Raw response keys: ${Object.keys(data).join(', ')}`);
+  console.log(`[Scrapingdog] Raw response keys: ${Object.keys(data || {}).join(', ')}`);
+
+  if (!data) {
+    throw new Error("Scrapingdog returned empty response");
+  }
 
   return transformScrapingdogResponse(data, profileUrl);
 }
@@ -217,7 +224,7 @@ export async function fetchLinkedInCompanyScrapingdog(
   }
 
   const companyId = extractCompanyId(companyUrl);
-  const apiUrl = `https://api.scrapingdog.com/linkedin?api_key=${ENV.scrapingdogApiKey}&type=company&linkId=${encodeURIComponent(companyId)}`;
+  const apiUrl = `https://api.scrapingdog.com/linkedin?api_key=${ENV.scrapingdogApiKey}&type=company&linkId=${encodeURIComponent(companyId)}&premium=true`;
 
   console.log(`[Scrapingdog] Fetching company: ${companyUrl}`);
   console.log(`[Scrapingdog] Company ID: ${companyId}`);
@@ -255,37 +262,49 @@ function transformScrapingdogResponse(data: any, inputUrl: string): ScrapingdogL
   console.log('[Scrapingdog] Timestamp:', new Date().toISOString());
   console.log('[Scrapingdog] Top-level keys:', Object.keys(data).join(', '));
 
-  // Log sample values
+  // Log sample values - using actual Scrapingdog field names
   console.log('[Scrapingdog] Sample values:');
-  console.log('  - name:', data.name || data.full_name);
-  console.log('  - headline:', data.headline || data.title);
+  console.log('  - fullName:', data.fullName);
+  console.log('  - headline:', data.headline);
   console.log('  - location:', data.location);
   console.log('  - about:', data.about ? String(data.about).substring(0, 100) + '...' : 'NULL');
+  console.log('  - experience count:', Array.isArray(data.experience) ? data.experience.length : 0);
 
-  // Experience transform - adapt to Scrapingdog's format
-  const experience = (data.experience || data.experiences || []).map((exp: any) => ({
-    title: exp.title || exp.position,
-    company: exp.company || exp.company_name || exp.organization,
-    companyId: exp.company_id || exp.companyId,
-    startDate: exp.start_date || exp.startDate || exp.from,
-    endDate: exp.end_date || exp.endDate || exp.to,
-    description: exp.description,
+  // Experience transform - Scrapingdog uses: position, company_name, company_image, starts_at, ends_at
+  const experience = (data.experience || []).map((exp: any) => ({
+    title: exp.position || exp.title,
+    company: exp.company_name || exp.company || exp.organization,
+    companyId: exp.company_id,
+    startDate: exp.starts_at || exp.start_date,
+    endDate: exp.ends_at || exp.end_date || (exp.ends_at === 'Present' ? null : exp.ends_at),
+    description: exp.summary || exp.description,
     descriptionHtml: exp.description_html,
-    url: exp.company_url || exp.url,
-    companyLogoUrl: exp.company_logo || exp.logo_url || exp.companyLogoUrl,
+    url: exp.company_url,
+    companyLogoUrl: exp.company_image || exp.company_logo,
   }));
 
-  // Education transform
-  const education = (data.education || data.educations || []).map((edu: any) => ({
-    school: edu.school || edu.school_name || edu.institution || edu.title,
-    degree: edu.degree || edu.degree_name,
-    field: edu.field || edu.field_of_study,
-    startDate: edu.start_date || edu.startDate || edu.from || edu.start_year,
-    endDate: edu.end_date || edu.endDate || edu.to || edu.end_year,
-    description: edu.description,
-    url: edu.school_url || edu.url,
-    instituteLogoUrl: edu.school_logo || edu.logo_url || edu.instituteLogoUrl,
-  }));
+  // Education transform - Scrapingdog uses: college_name, college_degree, college_degree_field, college_image, college_duration
+  const education = (data.education || []).map((edu: any) => {
+    // Parse duration like "1994 - 1996" or " - "
+    let startDate: string | undefined;
+    let endDate: string | undefined;
+    if (edu.college_duration && edu.college_duration !== ' - ') {
+      const parts = edu.college_duration.split(' - ');
+      startDate = parts[0]?.trim() || undefined;
+      endDate = parts[1]?.trim() || undefined;
+    }
+
+    return {
+      school: edu.college_name || edu.title || edu.school || edu.school_name || edu.institution,
+      degree: edu.college_degree || edu.degree_name || edu.degree,
+      field: edu.college_degree_field || edu.field_of_study || edu.field,
+      startDate: startDate || edu.starts_at || edu.start_date,
+      endDate: endDate || edu.ends_at || edu.end_date,
+      description: edu.college_activity || edu.description,
+      url: edu.college_url || edu.school_url || edu.url,
+      instituteLogoUrl: edu.college_image || edu.school_image || edu.logo_url,
+    };
+  });
 
   // Skills - handle both array of strings and array of objects
   let skills: string[] = [];
@@ -293,13 +312,44 @@ function transformScrapingdogResponse(data: any, inputUrl: string): ScrapingdogL
     skills = data.skills.map((s: any) => typeof s === 'string' ? s : (s.name || s.title || ''));
   }
 
+  // Parse followers/connections - Scrapingdog returns as strings like "11M followers"
+  let followers: number | undefined;
+  let connections: number | undefined;
+
+  if (typeof data.followers === 'string') {
+    const match = data.followers.match(/^([\d.]+)([KMB]?)/i);
+    if (match) {
+      let num = parseFloat(match[1]);
+      const suffix = match[2]?.toUpperCase();
+      if (suffix === 'K') num *= 1000;
+      else if (suffix === 'M') num *= 1000000;
+      else if (suffix === 'B') num *= 1000000000;
+      followers = Math.round(num);
+    }
+  } else if (typeof data.followers === 'number') {
+    followers = data.followers;
+  }
+
+  if (typeof data.connections === 'string') {
+    const match = data.connections.match(/^([\d.]+)([KMB+]?)/i);
+    if (match) {
+      let num = parseFloat(match[1]);
+      const suffix = match[2]?.toUpperCase();
+      if (suffix === 'K') num *= 1000;
+      else if (suffix === 'M') num *= 1000000;
+      connections = Math.round(num);
+    }
+  } else if (typeof data.connections === 'number') {
+    connections = data.connections;
+  }
+
   // Extract current company from experience if not provided directly
-  let currentCompanyName = data.current_company_name || data.company;
+  let currentCompanyName = data.current_company_name;
   let currentCompany = data.current_company;
   if (!currentCompanyName && experience.length > 0) {
-    // Find most recent (no end date) experience
-    const current = experience.find((e: any) => !e.endDate);
-    if (current) {
+    // First experience is usually current
+    const current = experience[0];
+    if (current && (!current.endDate || current.endDate === 'Present')) {
       currentCompanyName = current.company;
       currentCompany = {
         name: current.company,
@@ -310,28 +360,29 @@ function transformScrapingdogResponse(data: any, inputUrl: string): ScrapingdogL
   }
 
   // Parse location components
-  const location = data.location || data.city;
-  const city = data.city || (typeof location === 'string' ? location.split(',')[0]?.trim() : null);
-  const countryCode = data.country_code || data.countryCode;
+  const location = data.location;
+  const city = typeof location === 'string' ? location.split(',')[0]?.trim() : undefined;
+  const countryCode = data.country_code;
 
   console.log('[Scrapingdog] ========== TRANSFORMATION RESULTS ==========');
   console.log('[Scrapingdog] Experience count:', experience.length);
   console.log('[Scrapingdog] Education count:', education.length);
   console.log('[Scrapingdog] Skills count:', skills.length);
+  console.log('[Scrapingdog] Followers:', followers);
   console.log('[Scrapingdog] Current company:', currentCompanyName);
   console.log('[Scrapingdog] ======================================================');
 
   return {
-    // Identity
-    name: data.name || data.full_name || '',
-    firstName: data.first_name || data.firstName,
-    lastName: data.last_name || data.lastName,
-    linkedinId: data.linkedin_id || data.linkedinId || data.public_id,
-    linkedinNumId: data.linkedin_num_id || data.linkedinNumId,
+    // Identity - Scrapingdog uses fullName, first_name, last_name
+    name: data.fullName || data.full_name || `${data.first_name || ''} ${data.last_name || ''}`.trim() || '',
+    firstName: data.first_name,
+    lastName: data.last_name,
+    linkedinId: data.public_identifier || data.linkedin_id,
+    linkedinNumId: data.linkedin_internal_id || data.linkedin_num_id,
 
     // Professional
-    headline: data.headline || data.title || data.position,
-    position: data.position || data.headline,
+    headline: data.headline,
+    position: data.headline,
 
     // Location
     location,
@@ -339,30 +390,30 @@ function transformScrapingdogResponse(data: any, inputUrl: string): ScrapingdogL
     countryCode,
 
     // Bio
-    summary: data.about || data.summary || data.description,
+    summary: data.about,
     about: data.about,
 
     // Experience & Education
     experience,
     education,
-    educationDetails: data.education_details || data.educationDetails,
+    educationDetails: data.educations_details,
 
     // Skills & Recognition
     skills,
-    honorsAndAwards: data.honors_and_awards || data.honorsAndAwards,
+    honorsAndAwards: data.honors_and_awards,
 
     // Social Proof
-    connections: data.connections || data.connections_count,
-    followers: data.followers || data.followers_count,
+    connections,
+    followers,
 
-    // Visual Assets
-    profilePictureUrl: data.profile_picture || data.avatar || data.profilePictureUrl || data.image,
-    avatar: data.avatar || data.profile_picture,
-    bannerImage: data.banner_image || data.bannerImage || data.background_image,
+    // Visual Assets - Scrapingdog uses profile_photo, background_cover_image_url
+    profilePictureUrl: data.profile_photo || data.avatar,
+    avatar: data.profile_photo || data.avatar,
+    bannerImage: data.background_cover_image_url || data.banner_image,
     defaultAvatar: data.default_avatar,
 
     // External Links
-    bioLinks: data.bio_links || data.bioLinks || data.websites,
+    bioLinks: data.bio_links || data.websites,
 
     // Content & Activity
     posts: data.posts,

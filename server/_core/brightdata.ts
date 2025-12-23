@@ -325,6 +325,14 @@ function transformBrightDataResponse(data: any): BrightDataLinkedInProfile {
     hasProfileData ? 'SUCCESS' : 'UNKNOWN');
   console.log('[Bright Data] Top-level keys:', Object.keys(data).join(', '));
 
+  // If error response, log the error details
+  if (!hasSnapshotId && !hasPrivacyRestriction && !hasProfileData && data.status && data.message) {
+    console.error('[Bright Data] ❌ ERROR RESPONSE:');
+    console.error('[Bright Data] Status:', data.status);
+    console.error('[Bright Data] Message:', data.message);
+    console.error('[Bright Data] Full response:', JSON.stringify(data, null, 2));
+  }
+
   // Log data types for all fields
   const dataTypes = Object.fromEntries(
     Object.entries(data).map(([key, value]) => [
