@@ -157,7 +157,7 @@ export async function getAllContacts(userId?: number) {
         createdBy: uc.createdBy,
         createdAt: uc.createdAt,
         updatedAt: uc.updatedAt,
-        // NEW: Enrichment fields
+        // Import fields
         followers: uc.followers,
         connections: uc.connections,
         bannerImageUrl: uc.bannerImageUrl,
@@ -174,8 +174,10 @@ export async function getAllContacts(userId?: number) {
         memorializedAccount: uc.memorializedAccount,
         educationDetails: uc.educationDetails,
         honorsAndAwards: uc.honorsAndAwards,
-        lastEnrichedAt: uc.lastEnrichedAt,
-        enrichmentSource: uc.enrichmentSource,
+        lastImportedAt: uc.lastImportedAt,
+        importSource: uc.importSource,
+        importStatus: uc.importStatus,
+        opportunity: uc.opportunity,
         // Map user-specific fields back to contact for compatibility
         notes: uc.privateNotes,
         conversationSummary: uc.conversationSummary,
@@ -249,9 +251,9 @@ export async function searchContacts(query: string) {
 export async function createCompany(data: InsertCompany) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  
-  const [company] = await db.insert(companies).values(data).$returningId();
-  return company.id;
+
+  const result = await db.insert(companies).values(data);
+  return Number(result.insertId);
 }
 
 export async function getCompanyById(id: number) {
@@ -583,9 +585,9 @@ export async function updateContactEnrichment(
     if (enrichedData.educationDetails) updateData.educationDetails = enrichedData.educationDetails;
     if (enrichedData.honorsAndAwards) updateData.honorsAndAwards = JSON.stringify(enrichedData.honorsAndAwards);
 
-    // Enrichment metadata
-    updateData.lastEnrichedAt = new Date();
-    updateData.enrichmentSource = 'brightdata';
+    // Import metadata
+    updateData.lastImportedAt = new Date();
+    updateData.importSource = 'brightdata';
 
     if (Object.keys(updateData).length > 0) {
       await db.update(contacts)

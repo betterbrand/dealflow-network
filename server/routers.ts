@@ -159,16 +159,237 @@ export const appRouter = router({
         }
       }),
     
+    // Get available LinkedIn data providers
+    getAvailableProviders: protectedProcedure
+      .query(async () => {
+        const { getAvailableProviders } = await import("./_core/linkedin-provider");
+        return getAvailableProviders();
+      }),
+
+    // Preview import - fetch data without saving
+    getImportPreview: protectedProcedure
+      .input(z.object({
+        linkedinUrl: z.string(),
+        provider: z.enum(['brightdata', 'scrapingdog']).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { importLinkedInProfile } = await import("./import-adapter");
+        const { getDefaultProvider } = await import("./_core/linkedin-provider");
+
+        const provider = input.provider || getDefaultProvider();
+        if (!provider) {
+          throw new Error("No LinkedIn data provider configured");
+        }
+
+        console.log('[getImportPreview] Fetching preview using', provider, 'for:', input.linkedinUrl);
+        const imported = await importLinkedInProfile(input.linkedinUrl, { provider });
+
+        // Return preview data (without saving to DB)
+        return {
+          // Preview fields
+          name: imported.name,
+          firstName: imported.firstName,
+          lastName: imported.lastName,
+          headline: imported.headline,
+          profilePictureUrl: imported.profilePictureUrl,
+          currentCompany: imported.currentCompanyName || imported.experience?.[0]?.company,
+          currentRole: imported.experience?.[0]?.title,
+          location: imported.location,
+          followers: imported.followers,
+          connections: imported.connections,
+          provider,
+          // Full data for saving later
+          _rawData: imported,
+        };
+      }),
+
+    // Confirm import - save previewed data to contact
+    confirmImport: protectedProcedure
+      .input(z.object({
+        contactId: z.number(),
+        importData: z.any(), // The _rawData from preview
+        importCompany: z.boolean().optional(),
+        provider: z.enum(['brightdata', 'scrapingdog']),
+      }))
+      .mutation(async ({ input }) => {
+        const { updateContactEnrichment, getDb } = await import("./db");
+        const { getOrCreateCompanyForContact } = await import("./db-company-auto-create");
+        const { contacts } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+
+        const data = input.importData;
+        console.log('[confirmImport] Saving imported data for contact:', input.contactId);
+
+        // Extract company and role
+        let company = data.experience?.[0]?.company || data.currentCompanyName;
+        let role = data.experience?.[0]?.title;
+
+        // Auto-create company if requested
+        let companyId: number | undefined;
+        if (input.importCompany && company) {
+          try {
+            companyId = await getOrCreateCompanyForContact({
+              company,
+              experience: data.experience,
+            }) ?? undefined;
+            if (companyId) {
+              console.log('[confirmImport] Auto-created/linked company:', companyId);
+            }
+          } catch (error) {
+            console.error('[confirmImport] Failed to auto-create company:', error);
+          }
+        }
+
+        // Save to database
+        await updateContactEnrichment(input.contactId, {
+          summary: data.summary,
+          profilePictureUrl: data.profilePictureUrl,
+          experience: data.experience,
+          education: data.education,
+          skills: data.skills,
+          company,
+          role,
+          location: data.location,
+          followers: data.followers,
+          connections: data.connections,
+          bannerImageUrl: data.bannerImage,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          bioLinks: data.bioLinks,
+          posts: data.posts,
+          activity: data.activity,
+          peopleAlsoViewed: data.peopleAlsoViewed,
+          linkedinId: data.linkedinId,
+          linkedinNumId: data.linkedinNumId,
+          city: data.city,
+          countryCode: data.countryCode,
+          memorializedAccount: data.memorializedAccount,
+          educationDetails: data.educationDetails,
+          honorsAndAwards: data.honorsAndAwards,
+        });
+
+        // Update import status
+        const db = await getDb();
+        if (db) {
+          await db.update(contacts)
+            .set({
+              importStatus: 'complete',
+              importSource: input.provider,
+            })
+            .where(eq(contacts.id, input.contactId));
+        }
+
+        return {
+          success: true,
+          companyId,
+          experienceCount: data.experience?.length || 0,
+          educationCount: data.education?.length || 0,
+          skillsCount: data.skills?.length || 0,
+        };
+      }),
+
+    // Import from LinkedIn (full flow - fetch and save)
+    importFromLinkedIn: protectedProcedure
+      .input(z.object({
+        linkedinUrl: z.string(),
+        provider: z.enum(['brightdata', 'scrapingdog']).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { importLinkedInProfile } = await import("./import-adapter");
+        const { getOrCreateCompanyForContact } = await import("./db-company-auto-create");
+        const { getDefaultProvider } = await import("./_core/linkedin-provider");
+
+        const provider = input.provider || getDefaultProvider();
+        if (!provider) {
+          throw new Error("No LinkedIn data provider configured");
+        }
+
+        console.log('[importFromLinkedIn] Starting import using', provider, 'for:', input.linkedinUrl);
+        const imported = await importLinkedInProfile(input.linkedinUrl, { provider });
+        console.log('[importFromLinkedIn] Import complete, RDF store updated');
+        console.log('[importFromLinkedIn] Company fields in imported data:', {
+          currentCompanyName: imported.currentCompanyName,
+          currentCompany: imported.currentCompany,
+          hasExperience: !!imported.experience,
+          experienceLength: Array.isArray(imported.experience) ? imported.experience.length : 'null/undefined',
+          firstExperienceCompany: imported.experience?.[0]?.company,
+        });
+
+        // Auto-create company if one exists in the imported data
+        try {
+          const companyId = await getOrCreateCompanyForContact({
+            company: imported.experience?.[0]?.company,
+            experience: imported.experience,
+          });
+
+          if (companyId) {
+            console.log('[importFromLinkedIn] Auto-created/linked company:', companyId);
+            return { ...imported, companyId, _provider: provider };
+          }
+        } catch (error) {
+          console.error('[importFromLinkedIn] Failed to auto-create company:', error);
+        }
+
+        console.log('[importFromLinkedIn] Returning to frontend with currentCompanyName:', imported.currentCompanyName);
+        return { ...imported, _provider: provider };
+      }),
+
+    // Import company data from LinkedIn
+    importCompanyFromLinkedIn: protectedProcedure
+      .input(z.object({
+        companyUrl: z.string(),
+        contactId: z.number().optional(),
+        provider: z.enum(['brightdata', 'scrapingdog']).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { importLinkedInCompany } = await import("./import-adapter");
+        const { createCompany, getDb } = await import("./db");
+        const { contacts } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+
+        console.log('[importCompanyFromLinkedIn] Importing company:', input.companyUrl);
+        const company = await importLinkedInCompany(input.companyUrl, {
+          provider: input.provider,
+        });
+
+        // Create or update company record
+        const companyId = await createCompany({
+          name: company.name || 'Unknown Company',
+          description: company.description,
+          website: company.website,
+          industry: company.industry,
+          size: company.companySize,
+          location: company.headquarters,
+          foundedYear: company.founded,
+          logoUrl: company.logoUrl,
+          linkedinUrl: company.linkedinUrl,
+          employeeCount: company.employeeCount,
+        });
+
+        // Link to contact if provided
+        if (input.contactId && companyId) {
+          const db = await getDb();
+          if (db) {
+            await db.update(contacts)
+              .set({ companyId })
+              .where(eq(contacts.id, input.contactId));
+          }
+        }
+
+        return { companyId, company };
+      }),
+
+    // Backward compatibility - kept for existing code
     enrichFromLinkedIn: protectedProcedure
       .input(z.object({ linkedinUrl: z.string() }))
       .mutation(async ({ input }) => {
-        const { enrichLinkedInProfile } = await import("./enrichment-adapter");
+        const { importLinkedInProfile } = await import("./import-adapter");
         const { getOrCreateCompanyForContact } = await import("./db-company-auto-create");
 
-        console.log('[enrichFromLinkedIn] Starting enrichment for:', input.linkedinUrl);
-        const enriched = await enrichLinkedInProfile(input.linkedinUrl);
-        console.log('[enrichFromLinkedIn] Enrichment complete, RDF store updated');
-        console.log('[enrichFromLinkedIn] Company fields in enriched data:', {
+        console.log('[enrichFromLinkedIn] Starting import for:', input.linkedinUrl);
+        const enriched = await importLinkedInProfile(input.linkedinUrl);
+        console.log('[enrichFromLinkedIn] Import complete, RDF store updated');
+        console.log('[enrichFromLinkedIn] Company fields in imported data:', {
           currentCompanyName: enriched.currentCompanyName,
           currentCompany: enriched.currentCompany,
           hasExperience: !!enriched.experience,
@@ -176,25 +397,23 @@ export const appRouter = router({
           firstExperienceCompany: enriched.experience?.[0]?.company,
         });
 
-        // Auto-create company if one exists in the enriched data
+        // Auto-create company if one exists in the imported data
         try {
           const companyId = await getOrCreateCompanyForContact({
-            company: enriched.experience?.[0]?.company, // Current/most recent company
+            company: enriched.experience?.[0]?.company,
             experience: enriched.experience,
           });
 
           if (companyId) {
             console.log('[enrichFromLinkedIn] Auto-created/linked company:', companyId);
-            // Return enriched data with companyId for client to use when saving contact
             return { ...enriched, companyId };
           }
         } catch (error) {
           console.error('[enrichFromLinkedIn] Failed to auto-create company:', error);
-          // Continue without company - don't fail the whole enrichment
         }
 
         console.log('[enrichFromLinkedIn] Returning to frontend with currentCompanyName:', enriched.currentCompanyName);
-        console.log('[enrichFromLinkedIn] Full enriched keys:', Object.keys(enriched).sort().join(', '));
+        console.log('[enrichFromLinkedIn] Full imported keys:', Object.keys(enriched).sort().join(', '));
         return enriched;
       }),
     
@@ -216,13 +435,14 @@ export const appRouter = router({
         interestLevel: z.string().optional(),
         eventId: z.number().optional(),
         companyId: z.number().optional(),
-        skipEnrichment: z.boolean().optional(), // NEW: Skip background enrichment if already enriched
+        opportunity: z.string().optional(), // Why this contact matters - deal/opportunity context
+        skipEnrichment: z.boolean().optional(), // Skip background enrichment if already enriched
       }))
       .mutation(async ({ input, ctx }) => {
         const { createOrLinkContact } = await import("./db-collaborative");
         const { getDb } = await import("./db");
         const { socialProfiles } = await import("../drizzle/schema");
-        const { enrichContactBackground } = await import("./enrichment");
+        const { importContactBackground } = await import("./import");
         const { getOrCreateCompanyForContact } = await import("./db-company-auto-create");
 
         // Separate shared contact data from user-specific data
@@ -277,13 +497,13 @@ export const appRouter = router({
           }
           await db.insert(socialProfiles).values(profiles);
 
-          // Start background enrichment (unless skipEnrichment is true)
+          // Start background import (unless skipEnrichment is true)
           if (!input.skipEnrichment) {
-            enrichContactBackground(contactId, profiles).catch(err => {
-              console.error("Background enrichment failed:", err);
+            importContactBackground(contactId, profiles).catch((err: Error) => {
+              console.error("Background import failed:", err);
             });
           } else {
-            console.log(`[contacts.create] Skipping background enrichment for contact ${contactId} (already enriched)`);
+            console.log(`[contacts.create] Skipping background import for contact ${contactId} (already imported)`);
           }
         }
         
@@ -337,7 +557,7 @@ export const appRouter = router({
         const { updateContact, getContactById, updateContactEnrichment } = await import("./db");
         const { getDb } = await import("./db");
         const { socialProfiles } = await import("../drizzle/schema");
-        const { enrichContactBackground } = await import("./enrichment");
+        const { importContactBackground } = await import("./import");
         const { getOrCreateCompanyForContact } = await import("./db-company-auto-create");
         const { eq, and } = await import("drizzle-orm");
 
@@ -478,9 +698,9 @@ export const appRouter = router({
           if (profiles.length > 0) {
             await db.insert(socialProfiles).values(profiles);
             
-            // Start background enrichment
-            enrichContactBackground(id, profiles).catch(err => {
-              console.error("Background enrichment failed:", err);
+            // Start background import
+            importContactBackground(id, profiles).catch((err: Error) => {
+              console.error("Background import failed:", err);
             });
           }
         }
@@ -951,7 +1171,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         const { sendMessage } = await import("./telegram");
-        const { enrichContactBackground } = await import("./enrichment");
+        const { importContactBackground } = await import("./import");
         const { getDb } = await import("./db");
         const { socialProfiles } = await import("../drizzle/schema");
         const { eq, and } = await import("drizzle-orm");
@@ -965,10 +1185,10 @@ export const appRouter = router({
           .from(socialProfiles)
           .where(eq(socialProfiles.contactId, input.contactId));
         
-        // Start background enrichment
+        // Start background import
         if (profiles.length > 0) {
-          enrichContactBackground(input.contactId, profiles).catch(err => {
-            console.error("Background enrichment failed:", err);
+          importContactBackground(input.contactId, profiles).catch((err: Error) => {
+            console.error("Background import failed:", err);
           });
         }
         

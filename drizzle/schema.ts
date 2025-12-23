@@ -43,7 +43,7 @@ export const contacts = mysqlTable("contacts", {
   role: varchar("role", { length: 255 }),
   location: varchar("location", { length: 255 }),
   
-  // Enriched data from LinkedIn/Twitter (shared)
+  // Imported data from LinkedIn/Twitter (shared)
   twitterUrl: varchar("twitterUrl", { length: 500 }),
   summary: text("summary"),
   profilePictureUrl: text("profilePictureUrl"),
@@ -83,9 +83,13 @@ export const contacts = mysqlTable("contacts", {
   educationDetails: text("educationDetails"), // Free-text education summary
   honorsAndAwards: text("honorsAndAwards"), // JSON object of awards
 
-  // === Enrichment Metadata ===
-  lastEnrichedAt: timestamp("lastEnrichedAt"), // When profile was last enriched
-  enrichmentSource: varchar("enrichmentSource", { length: 50 }), // "brightdata", "manual", etc.
+  // === Import Metadata ===
+  lastImportedAt: timestamp("lastImportedAt"), // When profile was last imported
+  importSource: varchar("importSource", { length: 50 }), // "brightdata", "scrapingdog", "manual", etc.
+  importStatus: varchar("importStatus", { length: 50 }), // "pending", "complete", "failed", null
+
+  // === Opportunity ===
+  opportunity: text("opportunity"), // Why this contact matters - deal/opportunity context
 
   // Metadata
   companyId: int("companyId").references(() => companies.id),
@@ -219,7 +223,7 @@ export const socialProfiles = mysqlTable("socialProfiles", {
   platform: varchar("platform", { length: 50 }).notNull(),
   url: varchar("url", { length: 500 }).notNull(),
   profileData: text("profileData"),
-  lastEnriched: timestamp("lastEnriched"),
+  lastImported: timestamp("lastImported"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
