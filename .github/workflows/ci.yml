@@ -59,7 +59,9 @@ jobs:
               'city varchar(255)', 'countryCode varchar(10)',
               'memorializedAccount int DEFAULT 0', 'educationDetails text',
               'honorsAndAwards text', 'lastEnrichedAt timestamp',
-              'enrichmentSource varchar(50)'
+              'enrichmentSource varchar(50)',
+              'lastImportedAt timestamp', 'importSource varchar(50)',
+              'importStatus varchar(50)', 'opportunity text'
             ];
             for (const col of columns) {
               const name = col.split(' ')[0];
