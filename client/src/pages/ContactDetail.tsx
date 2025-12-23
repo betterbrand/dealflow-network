@@ -1,13 +1,24 @@
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Mail, Phone, MapPin, Building2, Calendar, User, Linkedin, Twitter, Plus, ExternalLink, Briefcase, GraduationCap, FileText, Users } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, Building2, Calendar, User, Linkedin, Twitter, Plus, ExternalLink, Briefcase, GraduationCap, FileText, Users, Download, RefreshCw, Loader2, CheckCircle, XCircle, Lightbulb } from "lucide-react";
 import { Link, useParams, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useState } from "react";
 import { AddRelationshipDialog } from "@/components/AddRelationshipDialog";
 import { EditContactDialog } from "@/components/EditContactDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 export default function ContactDetail() {
   const params = useParams();
@@ -15,9 +26,19 @@ export default function ContactDetail() {
   const [, setLocation] = useLocation();
   const [showAddRelationshipDialog, setShowAddRelationshipDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
-  
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importStep, setImportStep] = useState<'provider' | 'loading' | 'preview' | 'success'>('provider');
+  const [linkedinUrl, setLinkedinUrl] = useState('');
+  const [selectedProvider, setSelectedProvider] = useState<'scrapingdog' | 'brightdata'>('scrapingdog');
+  const [previewData, setPreviewData] = useState<any>(null);
+  const [importCompany, setImportCompany] = useState(false);
+
   const { data: contact, isLoading, refetch } = trpc.contacts.get.useQuery({ id: contactId });
   const { data: relationships, refetch: refetchRelationships } = trpc.relationships.getForContact.useQuery({ contactId });
+  const { data: availableProviders } = trpc.contacts.getAvailableProviders.useQuery();
+
+  const getImportPreviewMutation = trpc.contacts.getImportPreview.useMutation();
+  const confirmImportMutation = trpc.contacts.confirmImport.useMutation();
 
   // Parse JSON fields
   const experience = contact?.experience ? JSON.parse(contact.experience) : [];
@@ -69,6 +90,58 @@ export default function ContactDetail() {
     refetch();
   };
 
+  const handleOpenImportDialog = () => {
+    // Pre-fill LinkedIn URL if available
+    setLinkedinUrl(contact?.linkedinUrl || '');
+    setImportStep('provider');
+    setPreviewData(null);
+    setImportCompany(false);
+    setShowImportDialog(true);
+  };
+
+  const handleFetchPreview = async () => {
+    if (!linkedinUrl.trim()) return;
+
+    setImportStep('loading');
+    try {
+      const result = await getImportPreviewMutation.mutateAsync({
+        linkedinUrl: linkedinUrl.trim(),
+        provider: selectedProvider,
+      });
+      setPreviewData(result);
+      setImportStep('preview');
+    } catch (error) {
+      console.error('Failed to fetch preview:', error);
+      setImportStep('provider');
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    if (!previewData) return;
+
+    setImportStep('loading');
+    try {
+      await confirmImportMutation.mutateAsync({
+        contactId,
+        importData: previewData._rawData,
+        importCompany,
+        provider: selectedProvider,
+        linkedinUrl: linkedinUrl.trim(),
+      });
+      setImportStep('success');
+      refetch();
+    } catch (error) {
+      console.error('Failed to confirm import:', error);
+      setImportStep('preview');
+    }
+  };
+
+  const handleCloseImportDialog = () => {
+    setShowImportDialog(false);
+    setImportStep('provider');
+    setPreviewData(null);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -80,7 +153,47 @@ export default function ContactDetail() {
             </Button>
           </Link>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {/* Import Status Badge */}
+          {contact.importStatus === 'pending' && (
+            <Badge variant="outline" className="text-muted-foreground">
+              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              Import in progress...
+            </Badge>
+          )}
+          {contact.importStatus === 'complete' && contact.lastImportedAt && (
+            <Badge variant="secondary">
+              <CheckCircle className="mr-1 h-3 w-3" />
+              Imported {new Date(contact.lastImportedAt).toLocaleDateString()}
+            </Badge>
+          )}
+          {contact.importStatus === 'failed' && (
+            <Badge variant="destructive">
+              <XCircle className="mr-1 h-3 w-3" />
+              Import failed
+            </Badge>
+          )}
+
+          {/* Import Button */}
+          {contact.linkedinUrl && contact.importStatus !== 'complete' && (
+            <Button onClick={handleOpenImportDialog}>
+              <Download className="mr-2 h-4 w-4" />
+              Import from LinkedIn
+            </Button>
+          )}
+          {contact.importStatus === 'complete' && (
+            <Button variant="outline" onClick={handleOpenImportDialog}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Re-import
+            </Button>
+          )}
+          {!contact.linkedinUrl && contact.importStatus !== 'complete' && (
+            <Button variant="outline" onClick={handleOpenImportDialog}>
+              <Download className="mr-2 h-4 w-4" />
+              Import from LinkedIn
+            </Button>
+          )}
+
           <Button onClick={() => setShowAddRelationshipDialog(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Relationship
@@ -90,6 +203,21 @@ export default function ContactDetail() {
           </Button>
         </div>
       </div>
+
+      {/* Opportunity Card - Prominent at the top */}
+      {contact.opportunity && (
+        <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-700">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
+              <Lightbulb className="h-5 w-5" />
+              Opportunity
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-amber-900 dark:text-amber-100">{contact.opportunity}</p>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6 md:grid-cols-3">
         <div className="md:col-span-2 space-y-6">
@@ -349,19 +477,21 @@ export default function ContactDetail() {
               <CardContent className="space-y-4">
                 {posts.slice(0, 5).map((post: any, index: number) => (
                   <div key={index} className="space-y-2">
-                    {post.text && (
-                      <p className="text-sm line-clamp-3">{post.text}</p>
+                    {post.title && (
+                      <p className="text-sm font-medium">{post.title}</p>
+                    )}
+                    {post.attribution && (
+                      <p className="text-sm text-muted-foreground line-clamp-3">{post.attribution}</p>
                     )}
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      {post.date && (
-                        <span>{new Date(post.date).toLocaleDateString()}</span>
+                      {post.createdAt && (
+                        <span>{new Date(post.createdAt).toLocaleDateString()}</span>
                       )}
-                      {post.likes && <span>{post.likes} likes</span>}
-                      {post.comments && <span>{post.comments} comments</span>}
+                      {post.interaction && <span>{post.interaction}</span>}
                     </div>
-                    {post.url && (
+                    {post.link && (
                       <Button variant="ghost" size="sm" asChild>
-                        <a href={post.url} target="_blank" rel="noopener noreferrer">
+                        <a href={post.link} target="_blank" rel="noopener noreferrer">
                           View Post
                           <ExternalLink className="h-3 w-3 ml-1" />
                         </a>
@@ -571,6 +701,215 @@ export default function ContactDetail() {
           refetchRelationships();
         }}
       />
+
+      {/* Import from LinkedIn Dialog */}
+      <Dialog open={showImportDialog} onOpenChange={handleCloseImportDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          {importStep === 'provider' && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Import from LinkedIn</DialogTitle>
+                <DialogDescription>
+                  Fetch profile data from LinkedIn to enhance this contact
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="linkedin-url">LinkedIn Profile URL</Label>
+                  <Input
+                    id="linkedin-url"
+                    placeholder="https://www.linkedin.com/in/username"
+                    value={linkedinUrl}
+                    onChange={(e) => setLinkedinUrl(e.target.value)}
+                  />
+                </div>
+
+                {availableProviders && availableProviders.length > 1 && (
+                  <div className="space-y-3">
+                    <Label>Choose provider</Label>
+                    <RadioGroup
+                      value={selectedProvider}
+                      onValueChange={(value) => setSelectedProvider(value as 'scrapingdog' | 'brightdata')}
+                    >
+                      {availableProviders.map((provider) => (
+                        <div key={provider.id} className="flex items-center space-x-2">
+                          <RadioGroupItem value={provider.id} id={provider.id} />
+                          <Label htmlFor={provider.id} className="flex-1 cursor-pointer">
+                            <div className="flex items-center justify-between">
+                              <span>{provider.name}</span>
+                              <Badge variant="secondary" className="text-xs">
+                                {provider.speed === 'fast' ? 'Fast ~5-10s' : 'Slower ~30-60s'}
+                              </Badge>
+                            </div>
+                          </Label>
+                        </div>
+                      ))}
+                    </RadioGroup>
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={handleCloseImportDialog}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleFetchPreview}
+                  disabled={!linkedinUrl.trim()}
+                >
+                  Fetch Profile
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+
+          {importStep === 'loading' && (
+            <>
+              <DialogHeader>
+                <DialogTitle>
+                  {getImportPreviewMutation.isPending ? 'Fetching profile...' : 'Importing data...'}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">
+                  {getImportPreviewMutation.isPending
+                    ? `Fetching data from ${selectedProvider === 'scrapingdog' ? 'Scrapingdog' : 'Bright Data'}...`
+                    : 'Saving imported data...'}
+                </p>
+              </div>
+            </>
+          )}
+
+          {importStep === 'preview' && previewData && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Preview Import</DialogTitle>
+                <DialogDescription>
+                  Review the data before importing
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="py-4">
+                <div className="flex items-start gap-4 p-4 border rounded-lg">
+                  {previewData.profilePictureUrl && (
+                    <img
+                      src={previewData.profilePictureUrl}
+                      alt={previewData.name}
+                      className="w-16 h-16 rounded-full object-cover"
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold text-lg">{previewData.name || previewData.firstName + ' ' + previewData.lastName}</h4>
+                    {previewData.headline && (
+                      <p className="text-sm text-muted-foreground truncate">{previewData.headline}</p>
+                    )}
+                    {(previewData.currentCompany || previewData.currentRole) && (
+                      <p className="text-sm">
+                        {previewData.currentRole && <span>{previewData.currentRole}</span>}
+                        {previewData.currentRole && previewData.currentCompany && <span> at </span>}
+                        {previewData.currentCompany && <span className="font-medium">{previewData.currentCompany}</span>}
+                      </p>
+                    )}
+                    {previewData.location && (
+                      <p className="text-xs text-muted-foreground mt-1">{previewData.location}</p>
+                    )}
+                    <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+                      {previewData.followers && (
+                        <span>{previewData.followers.toLocaleString()} followers</span>
+                      )}
+                      {previewData.connections && (
+                        <span>{previewData.connections.toLocaleString()} connections</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 mt-4">
+                  <input
+                    type="checkbox"
+                    id="import-company"
+                    checked={importCompany}
+                    onChange={(e) => setImportCompany(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <Label htmlFor="import-company" className="text-sm">
+                    Also import company data
+                  </Label>
+                </div>
+
+                <div className="mt-4 p-3 bg-muted rounded-lg text-sm text-muted-foreground">
+                  <p className="font-medium mb-1">This import includes:</p>
+                  <ul className="space-y-1 text-xs">
+                    {previewData._rawData?.experience?.length > 0 && (
+                      <li>• {previewData._rawData.experience.length} work experiences</li>
+                    )}
+                    {previewData._rawData?.education?.length > 0 && (
+                      <li>• {previewData._rawData.education.length} education entries</li>
+                    )}
+                    {previewData._rawData?.skills?.length > 0 && (
+                      <li>• {previewData._rawData.skills.length} skills</li>
+                    )}
+                    {previewData._rawData?.posts?.length > 0 && (
+                      <li>• {previewData._rawData.posts.length} recent posts</li>
+                    )}
+                  </ul>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setImportStep('provider')}>
+                  Back
+                </Button>
+                <Button onClick={handleConfirmImport}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Import This Data
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+
+          {importStep === 'success' && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  Import Complete
+                </DialogTitle>
+              </DialogHeader>
+
+              <div className="py-4 space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Successfully imported LinkedIn profile data for {contact.name}.
+                </p>
+                {previewData?._rawData && (
+                  <div className="p-3 bg-muted rounded-lg text-sm">
+                    <p className="font-medium mb-1">Imported:</p>
+                    <ul className="space-y-1 text-xs text-muted-foreground">
+                      {previewData._rawData?.experience?.length > 0 && (
+                        <li>• {previewData._rawData.experience.length} work experiences</li>
+                      )}
+                      {previewData._rawData?.education?.length > 0 && (
+                        <li>• {previewData._rawData.education.length} education entries</li>
+                      )}
+                      {previewData._rawData?.skills?.length > 0 && (
+                        <li>• {previewData._rawData.skills.length} skills</li>
+                      )}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter>
+                <Button onClick={handleCloseImportDialog}>
+                  Done
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

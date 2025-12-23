@@ -204,8 +204,10 @@ export async function getUserContacts(userId: number) {
       memorializedAccount: contacts.memorializedAccount,
       educationDetails: contacts.educationDetails,
       honorsAndAwards: contacts.honorsAndAwards,
-      lastEnrichedAt: contacts.lastEnrichedAt,
-      enrichmentSource: contacts.enrichmentSource,
+      lastImportedAt: contacts.lastImportedAt,
+      importSource: contacts.importSource,
+      importStatus: contacts.importStatus,
+      opportunity: contacts.opportunity,
 
       // User-specific fields
       userContactId: userContacts.id,
@@ -276,8 +278,10 @@ export async function getUserContact(userId: number, contactId: number) {
       memorializedAccount: contacts.memorializedAccount,
       educationDetails: contacts.educationDetails,
       honorsAndAwards: contacts.honorsAndAwards,
-      lastEnrichedAt: contacts.lastEnrichedAt,
-      enrichmentSource: contacts.enrichmentSource,
+      lastImportedAt: contacts.lastImportedAt,
+      importSource: contacts.importSource,
+      importStatus: contacts.importStatus,
+      opportunity: contacts.opportunity,
 
       // User-specific fields
       userContactId: userContacts.id,
