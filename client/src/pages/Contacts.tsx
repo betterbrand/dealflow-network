@@ -4,12 +4,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useState } from "react";
 import { CreateContactDialog } from "@/components/CreateContactDialog";
 
 export default function Contacts() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [, setLocation] = useLocation();
   const { data: contacts, isLoading } = trpc.contacts.list.useQuery();
 
   const filteredContacts = contacts?.filter((item) => {
@@ -79,7 +80,11 @@ export default function Contacts() {
                 </TableHeader>
                 <TableBody>
                   {filteredContacts?.map((item) => (
-                    <TableRow key={item.contact.id}>
+                    <TableRow
+                      key={item.contact.id}
+                      onClick={() => setLocation(`/contacts/${item.contact.id}`)}
+                      className="cursor-pointer hover:bg-muted/50 transition-colors"
+                    >
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           {item.contact.profilePictureUrl && (

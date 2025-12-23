@@ -325,9 +325,12 @@ export default function ContactDetail() {
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-2">
-                  {skills.map((skill: string, index: number) => (
-                    <Badge key={index} variant="secondary">{skill}</Badge>
-                  ))}
+                  {skills.map((skill: any, index: number) => {
+                    // Handle both string skills and object skills {title, subtitle}
+                    const skillText = typeof skill === 'string' ? skill : skill?.title || skill?.name || '';
+                    if (!skillText) return null;
+                    return <Badge key={index} variant="secondary">{skillText}</Badge>;
+                  })}
                 </div>
               </CardContent>
             </Card>
