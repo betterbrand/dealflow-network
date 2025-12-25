@@ -842,14 +842,14 @@ export const appRouter = router({
       const { getAllContacts } = await import("./db");
       const { contactRelationships } = await import("../drizzle/schema");
       const { getDb } = await import("./db");
-      
+
       // Get all contacts for the user
       const contacts = await getAllContacts(ctx.user.id);
-      
+
       // Get all relationships
       const db = await getDb();
       const relationships = db ? await db.select().from(contactRelationships) : [];
-      
+
       // Transform to graph format
       const nodes = contacts.map(c => ({
         id: c.contact.id,
@@ -857,13 +857,19 @@ export const appRouter = router({
         company: c.contact.company || undefined,
         role: c.contact.role || undefined,
       }));
-      
-      const links = relationships.map((rel: any) => ({
-        source: rel.fromContactId,
-        target: rel.toContactId,
-        relationshipType: rel.relationshipType || undefined,
-      }));
-      
+
+      // Get set of valid node IDs for filtering
+      const validNodeIds = new Set(nodes.map(n => n.id));
+
+      // Filter relationships to only include edges where both nodes exist
+      const links = relationships
+        .filter((rel: any) => validNodeIds.has(rel.fromContactId) && validNodeIds.has(rel.toContactId))
+        .map((rel: any) => ({
+          source: rel.fromContactId,
+          target: rel.toContactId,
+          relationshipType: rel.relationshipType || undefined,
+        }));
+
       return { nodes, links };
     }),
   }),

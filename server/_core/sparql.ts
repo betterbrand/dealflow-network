@@ -321,3 +321,94 @@ export const QueryTemplates = {
   getPeopleWithSkill: (skill: string) =>
     `SELECT ?name ?jobTitle WHERE { ?person a schema:Person . ?person schema:name ?name . ?person schema:knowsAbout "${skill}" . ?person schema:jobTitle ?jobTitle }`,
 };
+
+/**
+ * Initialize RDF store from database contacts
+ * Rebuilds the semantic graph from stored LinkedIn data on server startup
+ */
+export async function initializeRdfStoreFromDatabase(): Promise<void> {
+  console.log("[SPARQL] Initializing RDF store from database...");
+
+  try {
+    const { getDb } = await import("../db");
+    const { transformLinkedInToSemanticGraph } = await import("./semantic-transformer");
+
+    const db = await getDb();
+    if (!db) {
+      console.warn("[SPARQL] Database not available, skipping RDF initialization");
+      return;
+    }
+
+    // Query all contacts with LinkedIn data (experience or education)
+    const { contacts } = await import("../../drizzle/schema");
+    const { isNotNull, or } = await import("drizzle-orm");
+
+    const contactsWithData = await db
+      .select()
+      .from(contacts)
+      .where(
+        or(
+          isNotNull(contacts.experience),
+          isNotNull(contacts.education),
+          isNotNull(contacts.linkedinUrl)
+        )
+      );
+
+    console.log(`[SPARQL] Found ${contactsWithData.length} contacts with LinkedIn data`);
+
+    let loadedCount = 0;
+    for (const contact of contactsWithData) {
+      try {
+        // Skip contacts without meaningful data
+        if (!contact.linkedinUrl && !contact.experience && !contact.education) {
+          continue;
+        }
+
+        // Reconstruct profile from stored data
+        const profile = {
+          name: contact.name || "",
+          firstName: contact.firstName || undefined,
+          lastName: contact.lastName || undefined,
+          headline: contact.role || undefined,
+          position: contact.role || undefined,
+          location: contact.location || undefined,
+          city: contact.city || undefined,
+          countryCode: contact.countryCode || undefined,
+          summary: contact.summary || undefined,
+          profilePictureUrl: contact.profilePictureUrl || undefined,
+          bannerImage: contact.bannerImageUrl || undefined,
+          followers: contact.followers || undefined,
+          connections: contact.connections || undefined,
+          linkedinId: contact.linkedinId || undefined,
+          linkedinNumId: contact.linkedinNumId || undefined,
+          experience: contact.experience ? JSON.parse(contact.experience) : [],
+          education: contact.education ? JSON.parse(contact.education) : [],
+          skills: contact.skills ? JSON.parse(contact.skills) : [],
+          bioLinks: contact.bioLinks ? JSON.parse(contact.bioLinks) : undefined,
+          peopleAlsoViewed: contact.peopleAlsoViewed ? JSON.parse(contact.peopleAlsoViewed) : undefined,
+        };
+
+        // Transform to semantic graph
+        const semanticGraph = transformLinkedInToSemanticGraph(
+          profile,
+          contact.linkedinUrl || `internal:contact-${contact.id}`,
+          {
+            source: (contact.importSource as any) || "LinkedIn",
+            timestamp: contact.lastImportedAt || contact.updatedAt || new Date(),
+          }
+        );
+
+        // Load into RDF store
+        await loadSemanticGraph(semanticGraph);
+        loadedCount++;
+      } catch (error) {
+        console.error(`[SPARQL] Failed to load contact ${contact.id}:`, error);
+      }
+    }
+
+    const stats = getGraphStats();
+    console.log(`[SPARQL] RDF store initialized: ${loadedCount} contacts loaded, ${stats.tripleCount} triples`);
+  } catch (error) {
+    console.error("[SPARQL] Failed to initialize RDF store:", error);
+  }
+}

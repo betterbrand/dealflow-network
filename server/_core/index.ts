@@ -70,8 +70,16 @@ async function startServer() {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
-  server.listen(port, () => {
+  server.listen(port, async () => {
     console.log(`Server running on http://localhost:${port}/`);
+
+    // Initialize RDF store from database (rebuild semantic graph on startup)
+    try {
+      const { initializeRdfStoreFromDatabase } = await import("./sparql");
+      await initializeRdfStoreFromDatabase();
+    } catch (error) {
+      console.error("[Server] Failed to initialize RDF store:", error);
+    }
   });
 }
 
