@@ -2,7 +2,12 @@
  * SPARQL Endpoint with RDF Triple Store
  *
  * Provides SPARQL 1.1 query capabilities for semantic knowledge graph.
- * Uses n3 library for RDF storage and querying.
+ * Uses n3 library for in-memory querying, backed by MySQL for persistence.
+ *
+ * Architecture:
+ * - DB is source of truth (rdfTriples table)
+ * - Memory store is lazy-loaded from DB on first query
+ * - New triples are written to DB first, then memory
  *
  * Features:
  * - Load JSON-LD into RDF triple store
@@ -14,6 +19,7 @@
 // @ts-ignore - n3 library has built-in types
 import { Store, Parser, Writer, DataFactory } from "n3";
 import type { SemanticGraph } from "./semantic-transformer";
+import { saveContactTriples, getAllTriples, type Triple } from "./triple-store";
 
 const { quad, namedNode, literal } = DataFactory;
 
@@ -24,9 +30,40 @@ const { quad, namedNode, literal } = DataFactory;
  */
 class RDFStore {
   private store: Store;
+  private _isEmpty: boolean = true;
 
   constructor() {
     this.store = new Store();
+  }
+
+  /**
+   * Check if the store is empty
+   */
+  isEmpty(): boolean {
+    return this._isEmpty && this.store.size === 0;
+  }
+
+  /**
+   * Load triples from database into memory store
+   */
+  async loadFromDatabase(triples: Triple[]): Promise<void> {
+    for (const triple of triples) {
+      try {
+        // Add quad directly to store
+        const subject = namedNode(triple.subject);
+        const predicate = namedNode(triple.predicate);
+        const object = triple.objectType === "uri"
+          ? namedNode(triple.object)
+          : literal(triple.object);
+
+        this.store.addQuad(quad(subject, predicate, object));
+      } catch (error) {
+        // Skip malformed triples
+        console.warn(`[SPARQL] Skipping malformed triple: ${triple.subject}`);
+      }
+    }
+    this._isEmpty = false;
+    console.log(`[SPARQL] Loaded ${triples.length} triples from database into memory`);
   }
 
   /**
@@ -41,6 +78,7 @@ class RDFStore {
       const parser = new Parser({ format: "N-Triples" });
       const quads = parser.parse(ntriples);
       this.store.addQuads(quads);
+      this._isEmpty = false;
 
       console.log(`[SPARQL] Loaded ${quads.length} triples into store`);
     } catch (error) {
@@ -229,6 +267,7 @@ class RDFStore {
    */
   clear(): void {
     this.store.removeQuads(this.store.getQuads(null, null, null, null));
+    this._isEmpty = true;
     console.log("[SPARQL] Store cleared");
   }
 
@@ -261,17 +300,76 @@ export interface QueryResult {
 export const rdfStore = new RDFStore();
 
 /**
- * Load semantic graph into RDF store
+ * Track if memory store has been loaded from DB
  */
-export async function loadSemanticGraph(semanticGraph: SemanticGraph): Promise<void> {
-  return rdfStore.loadSemanticGraph(semanticGraph);
+let memoryStoreLoaded = false;
+
+/**
+ * Ensure memory store is populated from DB (lazy load)
+ */
+async function ensureMemoryLoaded(): Promise<void> {
+  if (memoryStoreLoaded || !rdfStore.isEmpty()) return;
+
+  console.log("[SPARQL] Lazy-loading triples from database...");
+  const startTime = Date.now();
+
+  try {
+    const triples = await getAllTriples();
+
+    if (triples.length > 0) {
+      await rdfStore.loadFromDatabase(triples);
+    }
+
+    memoryStoreLoaded = true;
+    console.log(`[SPARQL] Lazy-loaded ${triples.length} triples in ${Date.now() - startTime}ms`);
+  } catch (error) {
+    console.error("[SPARQL] Failed to lazy-load from database:", error);
+    // Don't throw - allow queries to proceed with empty store
+  }
+}
+
+/**
+ * Load semantic graph into RDF store
+ * Persists to DB first (source of truth), then loads to memory
+ */
+export async function loadSemanticGraph(
+  semanticGraph: SemanticGraph,
+  contactId?: number
+): Promise<void> {
+  // 1. Persist to database first (source of truth)
+  if (contactId) {
+    try {
+      await saveContactTriples(contactId, semanticGraph);
+    } catch (error) {
+      console.error(`[SPARQL] Failed to persist triples for contact ${contactId}:`, error);
+      // Continue - still load to memory for current session
+    }
+  }
+
+  // 2. Load to memory store (best-effort cache)
+  try {
+    await rdfStore.loadSemanticGraph(semanticGraph);
+  } catch (error) {
+    console.error("[SPARQL] Failed to load to memory store:", error);
+  }
 }
 
 /**
  * Execute SPARQL query
+ * Lazy loads from DB if memory store is empty
  */
 export async function executeSparqlQuery(sparqlQuery: string): Promise<QueryResult> {
+  await ensureMemoryLoaded();
   return rdfStore.query(sparqlQuery);
+}
+
+/**
+ * Invalidate memory store (force reload on next query)
+ */
+export function invalidateMemoryStore(): void {
+  memoryStoreLoaded = false;
+  rdfStore.clear();
+  console.log("[SPARQL] Memory store invalidated - will reload from DB on next query");
 }
 
 /**
@@ -325,8 +423,11 @@ export const QueryTemplates = {
 /**
  * Initialize RDF store from database contacts
  * Rebuilds the semantic graph from stored LinkedIn data on server startup
+ *
+ * Phase 0 optimization: Parallel batch processing with timing metrics
  */
 export async function initializeRdfStoreFromDatabase(): Promise<void> {
+  const totalStartTime = Date.now();
   console.log("[SPARQL] Initializing RDF store from database...");
 
   try {
@@ -343,6 +444,7 @@ export async function initializeRdfStoreFromDatabase(): Promise<void> {
     const { contacts } = await import("../../drizzle/schema");
     const { isNotNull, or } = await import("drizzle-orm");
 
+    const dbQueryStart = Date.now();
     const contactsWithData = await db
       .select()
       .from(contacts)
@@ -353,17 +455,24 @@ export async function initializeRdfStoreFromDatabase(): Promise<void> {
           isNotNull(contacts.linkedinUrl)
         )
       );
+    const dbQueryTime = Date.now() - dbQueryStart;
 
-    console.log(`[SPARQL] Found ${contactsWithData.length} contacts with LinkedIn data`);
+    console.log(`[SPARQL] Found ${contactsWithData.length} contacts with LinkedIn data (query: ${dbQueryTime}ms)`);
 
+    // Filter contacts with meaningful data
+    const validContacts = contactsWithData.filter(
+      contact => contact.linkedinUrl || contact.experience || contact.education
+    );
+
+    // Process contacts in parallel batches for better performance
+    const BATCH_SIZE = 50;
     let loadedCount = 0;
-    for (const contact of contactsWithData) {
-      try {
-        // Skip contacts without meaningful data
-        if (!contact.linkedinUrl && !contact.experience && !contact.education) {
-          continue;
-        }
+    let failedCount = 0;
+    const transformStartTime = Date.now();
 
+    // Helper function to process a single contact
+    const processContact = async (contact: typeof validContacts[0]) => {
+      try {
         // Reconstruct profile from stored data
         const profile = {
           name: contact.name || "",
@@ -400,14 +509,44 @@ export async function initializeRdfStoreFromDatabase(): Promise<void> {
 
         // Load into RDF store
         await loadSemanticGraph(semanticGraph);
-        loadedCount++;
+        return { success: true };
       } catch (error) {
         console.error(`[SPARQL] Failed to load contact ${contact.id}:`, error);
+        return { success: false };
       }
+    };
+
+    // Process in parallel batches
+    for (let i = 0; i < validContacts.length; i += BATCH_SIZE) {
+      const batch = validContacts.slice(i, i + BATCH_SIZE);
+      const batchStartTime = Date.now();
+
+      const results = await Promise.all(batch.map(processContact));
+
+      const batchSuccesses = results.filter(r => r.success).length;
+      const batchFailures = results.filter(r => !r.success).length;
+      loadedCount += batchSuccesses;
+      failedCount += batchFailures;
+
+      const batchTime = Date.now() - batchStartTime;
+      const progress = Math.min(i + BATCH_SIZE, validContacts.length);
+      console.log(`[SPARQL] Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${progress}/${validContacts.length} contacts (${batchTime}ms)`);
     }
 
+    const transformTime = Date.now() - transformStartTime;
+    const totalTime = Date.now() - totalStartTime;
     const stats = getGraphStats();
-    console.log(`[SPARQL] RDF store initialized: ${loadedCount} contacts loaded, ${stats.tripleCount} triples`);
+
+    // Performance summary
+    console.log(`[SPARQL] ========== REBUILD PERFORMANCE ==========`);
+    console.log(`[SPARQL] Contacts processed: ${loadedCount} success, ${failedCount} failed`);
+    console.log(`[SPARQL] Triples loaded: ${stats.tripleCount}`);
+    console.log(`[SPARQL] Timing breakdown:`);
+    console.log(`[SPARQL]   - DB query: ${dbQueryTime}ms`);
+    console.log(`[SPARQL]   - Transform & load: ${transformTime}ms`);
+    console.log(`[SPARQL]   - Total: ${totalTime}ms`);
+    console.log(`[SPARQL] Avg per contact: ${validContacts.length > 0 ? Math.round(transformTime / validContacts.length) : 0}ms`);
+    console.log(`[SPARQL] ============================================`);
   } catch (error) {
     console.error("[SPARQL] Failed to initialize RDF store:", error);
   }
