@@ -73,12 +73,18 @@ async function startServer() {
   server.listen(port, async () => {
     console.log(`Server running on http://localhost:${port}/`);
 
-    // Initialize RDF store from database (rebuild semantic graph on startup)
-    try {
-      const { initializeRdfStoreFromDatabase } = await import("./sparql");
-      await initializeRdfStoreFromDatabase();
-    } catch (error) {
-      console.error("[Server] Failed to initialize RDF store:", error);
+    // RDF store now uses lazy loading from database
+    // Triples are loaded on first SPARQL query, not on startup
+    // Set PRELOAD_RDF_STORE=true to preload for faster first query
+    if (process.env.PRELOAD_RDF_STORE === "true") {
+      try {
+        const { initializeRdfStoreFromDatabase } = await import("./sparql");
+        await initializeRdfStoreFromDatabase();
+      } catch (error) {
+        console.error("[Server] Failed to preload RDF store:", error);
+      }
+    } else {
+      console.log("[Server] RDF store will lazy-load from database on first query");
     }
   });
 }
