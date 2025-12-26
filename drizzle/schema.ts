@@ -17,6 +17,55 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+
+  // === Profile Fields (mirrors contacts table) ===
+  phone: varchar("phone", { length: 50 }),
+  telegramUsername: varchar("telegramUsername", { length: 255 }),
+
+  // Professional info
+  company: varchar("company", { length: 255 }),
+  jobTitle: varchar("jobTitle", { length: 255 }),
+  location: varchar("location", { length: 255 }),
+
+  // Social links
+  linkedinUrl: varchar("linkedinUrl", { length: 500 }),
+  twitterUrl: varchar("twitterUrl", { length: 500 }),
+
+  // Profile content
+  bio: text("bio"), // User's bio/summary
+  profilePictureUrl: text("profilePictureUrl"),
+  bannerImageUrl: text("bannerImageUrl"),
+
+  // Parsed name
+  firstName: varchar("firstName", { length: 100 }),
+  lastName: varchar("lastName", { length: 100 }),
+
+  // Imported data from LinkedIn/Twitter
+  experience: text("experience"), // JSON array
+  education: text("education"), // JSON array
+  skills: text("skills"), // JSON array
+
+  // Social proof
+  followers: int("followers"),
+  connections: int("connections"),
+
+  // External links
+  bioLinks: text("bioLinks"), // JSON array: [{title, link}]
+
+  // Recent activity
+  posts: text("posts"), // JSON array of recent posts
+  activity: text("activity"), // JSON array of recent activity
+
+  // LinkedIn metadata
+  linkedinId: varchar("linkedinId", { length: 100 }),
+  linkedinNumId: varchar("linkedinNumId", { length: 100 }),
+  city: varchar("city", { length: 255 }),
+  countryCode: varchar("countryCode", { length: 10 }),
+
+  // Import tracking
+  lastImportedAt: timestamp("lastImportedAt"),
+  importSource: varchar("importSource", { length: 50 }),
+
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

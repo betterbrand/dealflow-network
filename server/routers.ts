@@ -16,6 +16,43 @@ export const appRouter = router({
         success: true,
       } as const;
     }),
+
+    // Get full user profile
+    getProfile: protectedProcedure.query(async ({ ctx }) => {
+      const { getUserProfile } = await import("./db");
+      return await getUserProfile(ctx.user.id);
+    }),
+
+    // Update user profile
+    updateProfile: protectedProcedure
+      .input(z.object({
+        name: z.string().optional(),
+        phone: z.string().optional(),
+        telegramUsername: z.string().optional(),
+        company: z.string().optional(),
+        jobTitle: z.string().optional(),
+        location: z.string().optional(),
+        linkedinUrl: z.string().optional(),
+        twitterUrl: z.string().optional(),
+        bio: z.string().optional(),
+        profilePictureUrl: z.string().optional(),
+        bannerImageUrl: z.string().optional(),
+        firstName: z.string().optional(),
+        lastName: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { updateUserProfile } = await import("./db");
+        return await updateUserProfile(ctx.user.id, input);
+      }),
+
+    // Import profile from LinkedIn URL
+    importLinkedInProfile: protectedProcedure
+      .input(z.object({ linkedinUrl: z.string().url() }))
+      .mutation(async ({ input, ctx }) => {
+        const { importUserLinkedInProfile } = await import("./db");
+        return await importUserLinkedInProfile(ctx.user.id, input.linkedinUrl);
+      }),
+
     // TEMPORARY: Email-gate login (no verification)
     // This bypasses magic link authentication as a workaround for publishing issues
     // Will be removed once proper magic link publishing is fixed
@@ -24,7 +61,7 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         const { upsertUser } = await import("./db");
         const { generateSessionToken } = await import("./_core/magic-link");
-        
+
         // Create/update user with just email (no OAuth)
         await upsertUser({
           openId: `email-gate-${input.email}`, // Temporary openId format
@@ -33,12 +70,12 @@ export const appRouter = router({
           loginMethod: "email-gate",
           lastSignedIn: new Date(),
         });
-        
+
         // Create session token
         const token = generateSessionToken(input.email);
         const cookieOptions = getSessionCookieOptions(ctx.req);
         ctx.res.cookie(COOKIE_NAME, token, cookieOptions);
-        
+
         return { success: true };
       }),
   }),

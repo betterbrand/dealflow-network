@@ -80,17 +80,22 @@ export function SimpleCollapsibleNav() {
 
       {/* User Menu */}
       <div className="border-t p-3 space-y-2">
-        <div className={cn(
-          "flex items-center gap-3 px-1 py-1 rounded-md",
-          isCollapsed && "flex-col gap-2"
-        )}>
+        <button
+          onClick={() => setLocation("/profile")}
+          className={cn(
+            "flex items-center gap-3 px-1 py-1 rounded-md w-full hover:bg-sidebar-accent transition-colors",
+            isCollapsed && "flex-col gap-2",
+            location === "/profile" && "bg-sidebar-accent"
+          )}
+          title={isCollapsed ? "My Profile" : undefined}
+        >
           <Avatar className="h-9 w-9 border shrink-0">
             <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
               {user?.name?.charAt(0).toUpperCase()}
             </AvatarFallback>
           </Avatar>
           {!isCollapsed && (
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 text-left">
               <p className="text-sm font-medium truncate leading-none">
                 {user?.name || "-"}
               </p>
@@ -99,7 +104,7 @@ export function SimpleCollapsibleNav() {
               </p>
             </div>
           )}
-        </div>
+        </button>
 
         {/* Theme Toggle */}
         <ThemeToggle collapsed={isCollapsed} />

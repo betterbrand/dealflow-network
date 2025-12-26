@@ -38,17 +38,19 @@ export interface UserCentricGraphResult {
 }
 
 /**
- * Get user's direct contacts that have LinkedIn data
+ * Get ALL of user's direct contacts
  * These become Degree 1 nodes in the graph
+ * Contacts with LinkedIn data are prioritized and shown first
  */
-export async function getUserContactsWithLinkedInData(
+export async function getUserContacts(
   userId: number,
   limit: number = 50
 ): Promise<GraphNode[]> {
   const db = await getDb();
   if (!db) return [];
 
-  // Join userContacts with contacts to get user's contacts with LinkedIn data
+  // Join userContacts with contacts to get ALL user's contacts
+  // Order by: has LinkedIn data first, then by followers count
   const results = await db
     .select({
       id: contacts.id,
@@ -59,21 +61,16 @@ export async function getUserContactsWithLinkedInData(
       connections: contacts.connections,
       profilePictureUrl: contacts.profilePictureUrl,
       peopleAlsoViewed: contacts.peopleAlsoViewed,
+      linkedinUrl: contacts.linkedinUrl,
     })
     .from(userContacts)
     .innerJoin(contacts, eq(userContacts.contactId, contacts.id))
-    .where(
-      and(
-        eq(userContacts.userId, userId),
-        // Has LinkedIn data (at least one of these fields)
-        or(
-          isNotNull(contacts.linkedinUrl),
-          isNotNull(contacts.peopleAlsoViewed),
-          isNotNull(contacts.followers)
-        )
-      )
+    .where(eq(userContacts.userId, userId))
+    .orderBy(
+      // Prioritize contacts with LinkedIn data
+      sql`CASE WHEN ${contacts.linkedinUrl} IS NOT NULL OR ${contacts.followers} IS NOT NULL THEN 0 ELSE 1 END`,
+      sql`${contacts.followers} DESC NULLS LAST`
     )
-    .orderBy(sql`${contacts.followers} DESC NULLS LAST`)
     .limit(limit);
 
   return results.map(c => ({
@@ -185,9 +182,17 @@ export async function buildUserCentricGraph(
     };
   }
 
-  // Get user info for the center node
+  // Get user info for the center node (with full profile data)
   const userResult = await db
-    .select({ id: users.id, name: users.name })
+    .select({
+      id: users.id,
+      name: users.name,
+      company: users.company,
+      jobTitle: users.jobTitle,
+      profilePictureUrl: users.profilePictureUrl,
+      followers: users.followers,
+      connections: users.connections,
+    })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
@@ -206,12 +211,17 @@ export async function buildUserCentricGraph(
     };
   }
 
-  // Initialize with user node (Degree 0)
+  // Initialize with user node (Degree 0) - full profile
   const allNodes: GraphNode[] = [
     {
       id: "user",
       name: user.name || "You",
+      company: user.company || undefined,
+      role: user.jobTitle || undefined,
       degree: 0,
+      followers: user.followers || undefined,
+      connections: user.connections || undefined,
+      profilePictureUrl: user.profilePictureUrl || undefined,
       isUser: true,
     },
   ];
@@ -220,8 +230,8 @@ export async function buildUserCentricGraph(
   const nodesByDegree: Record<number, number> = { 0: 1 };
   const edgesByType: Record<string, number> = {};
 
-  // Degree 1: User's direct contacts with LinkedIn data
-  const degree1Nodes = await getUserContactsWithLinkedInData(userId, maxNodesPerDegree);
+  // Degree 1: All user's direct contacts
+  const degree1Nodes = await getUserContacts(userId, maxNodesPerDegree);
 
   for (const node of degree1Nodes) {
     allNodes.push(node);
