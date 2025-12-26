@@ -1,18 +1,24 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { 
-  createCompany, 
-  getCompanyById, 
-  getAllCompanies, 
+import {
+  createCompany,
+  getCompanyById,
+  getAllCompanies,
   getCompaniesWithStats,
   getCompanyWithContacts,
   updateCompany,
-  deleteCompany
+  deleteCompany,
+  getDb
 } from './db';
 
-describe('Companies Feature', () => {
+// Skip if no database URL
+const hasDb = !!process.env.DATABASE_URL;
+
+describe.skipIf(!hasDb)('Companies Feature', () => {
   let testCompanyId: number;
 
   beforeAll(async () => {
+    const db = await getDb();
+    if (!db) return;
     // Create a test company
     testCompanyId = await createCompany({
       name: 'Test Company',
