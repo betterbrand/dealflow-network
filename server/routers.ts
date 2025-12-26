@@ -16,6 +16,43 @@ export const appRouter = router({
         success: true,
       } as const;
     }),
+
+    // Get full user profile
+    getProfile: protectedProcedure.query(async ({ ctx }) => {
+      const { getUserProfile } = await import("./db");
+      return await getUserProfile(ctx.user.id);
+    }),
+
+    // Update user profile
+    updateProfile: protectedProcedure
+      .input(z.object({
+        name: z.string().optional(),
+        phone: z.string().optional(),
+        telegramUsername: z.string().optional(),
+        company: z.string().optional(),
+        jobTitle: z.string().optional(),
+        location: z.string().optional(),
+        linkedinUrl: z.string().optional(),
+        twitterUrl: z.string().optional(),
+        bio: z.string().optional(),
+        profilePictureUrl: z.string().optional(),
+        bannerImageUrl: z.string().optional(),
+        firstName: z.string().optional(),
+        lastName: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { updateUserProfile } = await import("./db");
+        return await updateUserProfile(ctx.user.id, input);
+      }),
+
+    // Import profile from LinkedIn URL
+    importLinkedInProfile: protectedProcedure
+      .input(z.object({ linkedinUrl: z.string().url() }))
+      .mutation(async ({ input, ctx }) => {
+        const { importUserLinkedInProfile } = await import("./db");
+        return await importUserLinkedInProfile(ctx.user.id, input.linkedinUrl);
+      }),
+
     // TEMPORARY: Email-gate login (no verification)
     // This bypasses magic link authentication as a workaround for publishing issues
     // Will be removed once proper magic link publishing is fixed
@@ -24,7 +61,7 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         const { upsertUser } = await import("./db");
         const { generateSessionToken } = await import("./_core/magic-link");
-        
+
         // Create/update user with just email (no OAuth)
         await upsertUser({
           openId: `email-gate-${input.email}`, // Temporary openId format
@@ -33,12 +70,12 @@ export const appRouter = router({
           loginMethod: "email-gate",
           lastSignedIn: new Date(),
         });
-        
+
         // Create session token
         const token = generateSessionToken(input.email);
         const cookieOptions = getSessionCookieOptions(ctx.req);
         ctx.res.cookie(COOKIE_NAME, token, cookieOptions);
-        
+
         return { success: true };
       }),
   }),
@@ -1364,6 +1401,158 @@ export const appRouter = router({
           return { success: false, message: "Cannot remove yourself" };
         }
         return removeAuthorizedUser(input.email);
+      }),
+  }),
+
+  agent: router({
+    chat: protectedProcedure
+      .input(z.object({
+        sessionId: z.number().optional(),
+        message: z.string().min(1).max(2000),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { getOrCreateConversationalSession, addConversationMessage, getConversationHistory } = await import("./services/agent/db");
+        const { parseMessage } = await import("./services/agent/conversation/intent-parser");
+        const { generateResponse, generateGreetingResponse, generateControlResponse, generateErrorResponse } = await import("./services/agent/conversation/response-generator");
+        const { updateSessionStatus } = await import("./services/agent/db");
+
+        const userId = ctx.user.id;
+
+        try {
+          const sessionId = await getOrCreateConversationalSession(userId, input.sessionId);
+          const history = await getConversationHistory(sessionId, 10);
+          const conversationHistory = history.reverse().map((m) => ({
+            role: m.role as "user" | "agent",
+            content: m.content,
+          }));
+
+          await addConversationMessage(sessionId, "user", input.message);
+          const analysis = await parseMessage(input.message, conversationHistory);
+
+          let response;
+
+          switch (analysis.intent.type) {
+            case "greeting":
+              response = generateGreetingResponse(sessionId);
+              break;
+            case "agent_control":
+              const action = analysis.intent.entities.query || "pause";
+              if (action === "pause") await updateSessionStatus(sessionId, "paused");
+              else if (action === "resume") await updateSessionStatus(sessionId, "running");
+              response = generateControlResponse(action, sessionId);
+              break;
+            default:
+              response = await generateResponse(
+                { analysis, sessionId, conversationHistory },
+                {
+                  scenario: "general_response",
+                  values: { query: input.message },
+                  suggestedFollowups: ["Who can introduce me to someone at [company]?", "Show me my strongest connections"],
+                  confidence: 0.6,
+                }
+              );
+          }
+
+          await addConversationMessage(sessionId, "agent", response.content, {
+            sentiment: analysis.sentiment.mood,
+            tone: response.tone,
+            intentType: analysis.intent.type,
+          });
+
+          return response;
+        } catch (error) {
+          console.error("[Agent] Chat error:", error);
+          return generateErrorResponse(error instanceof Error ? error.message : "Unknown error", input.sessionId || 0);
+        }
+      }),
+
+    getSessions: protectedProcedure
+      .input(z.object({ limit: z.number().min(1).max(50).default(10) }).optional())
+      .query(async ({ ctx, input }) => {
+        const { getUserSessions } = await import("./services/agent/db");
+        return getUserSessions(ctx.user.id, input?.limit || 10);
+      }),
+
+    getSession: protectedProcedure
+      .input(z.object({ sessionId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const { getSession } = await import("./services/agent/db");
+        const session = await getSession(input.sessionId);
+        if (session && session.userId !== ctx.user.id) {
+          return null;
+        }
+        return session;
+      }),
+
+    getConversation: protectedProcedure
+      .input(z.object({
+        sessionId: z.number(),
+        limit: z.number().min(1).max(100).default(50),
+      }))
+      .query(async ({ input, ctx }) => {
+        const { getSession, getConversationHistory } = await import("./services/agent/db");
+        const session = await getSession(input.sessionId);
+        if (!session || session.userId !== ctx.user.id) {
+          return [];
+        }
+        const messages = await getConversationHistory(input.sessionId, input.limit);
+        return messages.reverse();
+      }),
+
+    startSession: protectedProcedure
+      .input(z.object({
+        sessionType: z.enum(["background_scan", "conversational"]),
+        goal: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { createSession } = await import("./services/agent/db");
+        const sessionId = await createSession(ctx.user.id, input.sessionType, input.goal);
+        return { sessionId };
+      }),
+
+    pauseSession: protectedProcedure
+      .input(z.object({ sessionId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const { getSession, updateSessionStatus } = await import("./services/agent/db");
+        const session = await getSession(input.sessionId);
+        if (!session || session.userId !== ctx.user.id) {
+          throw new Error("Session not found");
+        }
+        await updateSessionStatus(input.sessionId, "paused");
+        return { success: true };
+      }),
+
+    resumeSession: protectedProcedure
+      .input(z.object({ sessionId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const { getSession, updateSessionStatus } = await import("./services/agent/db");
+        const session = await getSession(input.sessionId);
+        if (!session || session.userId !== ctx.user.id) {
+          throw new Error("Session not found");
+        }
+        await updateSessionStatus(input.sessionId, "running");
+        return { success: true };
+      }),
+
+    getFindings: protectedProcedure
+      .input(z.object({
+        status: z.enum(["pending", "confirmed", "dismissed"]).optional(),
+        limit: z.number().min(1).max(100).default(20),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        const { getFindings } = await import("./services/agent/db");
+        return getFindings(ctx.user.id, input?.status, input?.limit || 20);
+      }),
+
+    reviewFinding: protectedProcedure
+      .input(z.object({
+        findingId: z.number(),
+        action: z.enum(["confirm", "dismiss"]),
+      }))
+      .mutation(async ({ input }) => {
+        const { reviewFinding } = await import("./services/agent/db");
+        await reviewFinding(input.findingId, input.action);
+        return { success: true };
       }),
   }),
 });

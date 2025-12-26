@@ -12,7 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
-import { Filter, Maximize2, Minimize2, X, Search, Network, Users } from "lucide-react";
+import { Filter, Maximize2, Minimize2, X, Search, Network, Users, Sparkles } from "lucide-react";
+import { AgentPanel } from "@/components/agent";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import CytoscapeComponent from "react-cytoscapejs";
@@ -685,6 +686,9 @@ export default function Graph() {
                 </Badge>
               )}
             </Button>
+
+            {/* Agent Panel */}
+            <AgentPanel />
 
             <Button variant="outline" size="sm" onClick={toggleFullscreen}>
               {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}

@@ -15,6 +15,7 @@ import Suggestions from "./pages/Suggestions";
 import AIQuery from "./pages/AIQuery";
 import AdminUsers from "./pages/AdminUsers";
 import Login from "./pages/Login";
+import Profile from "./pages/Profile";
 import { useAuth } from "./_core/hooks/useAuth";
 
 function Router() {
@@ -85,6 +86,11 @@ function Router() {
       <Route path="/admin/users" component={() => (
         <DashboardLayout>
           <AdminUsers />
+        </DashboardLayout>
+      )} />
+      <Route path="/profile" component={() => (
+        <DashboardLayout>
+          <Profile />
         </DashboardLayout>
       )} />
       <Route path="/404" component={NotFound} />
