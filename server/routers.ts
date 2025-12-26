@@ -913,6 +913,34 @@ export const appRouter = router({
 
       return { nodes, links };
     }),
+
+    getUserCentricGraph: protectedProcedure
+      .input(
+        z.object({
+          maxDepth: z.number().min(1).max(4).default(3),
+          maxNodesPerDegree: z.number().min(5).max(50).default(20),
+        }).optional()
+      )
+      .query(async ({ ctx, input }) => {
+        const config = input ?? { maxDepth: 3, maxNodesPerDegree: 20 };
+        const { buildUserCentricGraph } = await import("./db-graph");
+
+        const result = await buildUserCentricGraph(
+          ctx.user.id,
+          config.maxDepth,
+          config.maxNodesPerDegree
+        );
+
+        return result;
+      }),
+
+    computeInferredEdges: protectedProcedure
+      .input(z.object({ contactId: z.number() }))
+      .mutation(async ({ input }) => {
+        const { computeInferredEdgesForContact } = await import("./services/inferred-edges.service");
+        const edgesCreated = await computeInferredEdgesForContact(input.contactId);
+        return { success: true, edgesCreated };
+      }),
   }),
 
   // Semantic Graph and SPARQL endpoints

@@ -10,9 +10,9 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
+import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
-import { Filter, Maximize2, Minimize2, X, Search } from "lucide-react";
+import { Filter, Maximize2, Minimize2, X, Search, Network, Users } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import CytoscapeComponent from "react-cytoscapejs";
@@ -25,28 +25,24 @@ import "cytoscape-context-menus/cytoscape-context-menus.css";
 cytoscape.use(fcose);
 cytoscape.use(contextMenus);
 
-interface GraphNode {
-  data: {
-    id: string;
-    label: string;
-    name: string;
-    company?: string;
-    role?: string;
-    connections: number;
-    color: string;
-    size: number;
-  };
-}
+type GraphMode = "user-centric" | "relationships";
 
-interface GraphEdge {
-  data: {
-    id: string;
-    source: string;
-    target: string;
-    label: string;
-    relationshipType?: string;
-  };
-}
+// Colors for different degrees
+const DEGREE_COLORS = {
+  0: "#6366f1", // User - Indigo
+  1: "#3b82f6", // Direct contacts - Blue
+  2: "#10b981", // 2nd degree - Emerald
+  3: "#f59e0b", // 3rd degree - Amber
+};
+
+// Edge type colors
+const EDGE_TYPE_COLORS = {
+  direct_contact: "#6366f1",
+  people_also_viewed: "#10b981",
+  same_company: "#f59e0b",
+  same_school: "#8b5cf6",
+  shared_skills: "#ec4899",
+};
 
 export default function Graph() {
   const { user, loading: authLoading } = useAuth();
@@ -57,21 +53,31 @@ export default function Graph() {
   const [selectedRelationType, setSelectedRelationType] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [searchResults, setSearchResults] = useState<string[]>([]);
-  
+  const [graphMode, setGraphMode] = useState<GraphMode>("user-centric");
+
   const cyRef = useRef<cytoscape.Core | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
 
-  const { data: graphData, isLoading } = trpc.contacts.getGraph.useQuery(
+  // Original graph query (relationships mode)
+  const { data: relationshipsData, isLoading: isLoadingRelationships } = trpc.contacts.getGraph.useQuery(
     undefined,
-    { enabled: !!user }
+    { enabled: !!user && graphMode === "relationships" }
   );
+
+  // New user-centric graph query
+  const { data: userCentricData, isLoading: isLoadingUserCentric } = trpc.contacts.getUserCentricGraph.useQuery(
+    { maxDepth: 3, maxNodesPerDegree: 25 },
+    { enabled: !!user && graphMode === "user-centric" }
+  );
+
+  const isLoading = graphMode === "user-centric" ? isLoadingUserCentric : isLoadingRelationships;
 
   const { data: companiesList } = trpc.companies.list.useQuery(undefined, {
     enabled: !!user,
   });
 
-  // Generate company colors
+  // Generate company colors for relationships mode
   const companyColors = useRef<Map<string, string>>(new Map());
   const getCompanyColor = useCallback((company: string) => {
     if (!companyColors.current.has(company)) {
@@ -81,13 +87,58 @@ export default function Graph() {
     return companyColors.current.get(company)!;
   }, []);
 
-  // Transform data for Cytoscape
-  const cytoscapeElements = useCallback(() => {
-    if (!graphData) return [];
+  // Transform user-centric data for Cytoscape
+  const userCentricElements = useCallback(() => {
+    if (!userCentricData) return [];
 
-    const nodes: GraphNode[] = graphData.nodes.map((node) => {
+    const nodes = userCentricData.nodes.map((node) => {
+      const degree = node.degree;
+      const color = DEGREE_COLORS[degree as keyof typeof DEGREE_COLORS] || DEGREE_COLORS[3];
+
+      // Size based on followers (log scale) or fixed for user
+      const size = node.isUser
+        ? 80
+        : Math.max(35, Math.min(65, 35 + Math.log10((node.followers || 1) + 1) * 10));
+
+      return {
+        data: {
+          id: String(node.id),
+          label: node.name,
+          name: node.name,
+          company: node.company,
+          role: node.role,
+          degree,
+          isUser: node.isUser || false,
+          followers: node.followers || 0,
+          connections: node.connections || 0,
+          profilePictureUrl: node.profilePictureUrl,
+          color,
+          size,
+        },
+      };
+    });
+
+    const edges = userCentricData.edges.map((edge, idx) => ({
+      data: {
+        id: `edge-${idx}`,
+        source: String(edge.source),
+        target: String(edge.target),
+        edgeType: edge.edgeType,
+        strength: edge.strength,
+        color: EDGE_TYPE_COLORS[edge.edgeType as keyof typeof EDGE_TYPE_COLORS] || "#94a3b8",
+      },
+    }));
+
+    return [...nodes, ...edges];
+  }, [userCentricData]);
+
+  // Transform relationships data for Cytoscape (original mode)
+  const relationshipsElements = useCallback(() => {
+    if (!relationshipsData) return [];
+
+    const nodes = relationshipsData.nodes.map((node) => {
       const company = node.company || "Unknown";
-      const connections = graphData.links.filter(
+      const connections = relationshipsData.links.filter(
         (link: any) => link.source === node.id || link.target === node.id
       ).length;
 
@@ -101,34 +152,38 @@ export default function Graph() {
           connections,
           color: getCompanyColor(company),
           size: Math.max(30, Math.min(80, 30 + connections * 5)),
+          degree: 1,
+          isUser: false,
         },
       };
     });
 
-    const edges: GraphEdge[] = graphData.links.map((link: any, idx: number) => ({
+    const edges = relationshipsData.links.map((link: any, idx: number) => ({
       data: {
         id: `edge-${idx}`,
         source: link.source.toString(),
         target: link.target.toString(),
         label: link.relationshipType || "",
         relationshipType: link.relationshipType,
+        edgeType: "relationship",
+        color: "#6366f1",
       },
     }));
 
     return [...nodes, ...edges];
-  }, [graphData, getCompanyColor]);
+  }, [relationshipsData, getCompanyColor]);
 
-  // Apply filters
+  const cytoscapeElements = graphMode === "user-centric" ? userCentricElements : relationshipsElements;
+
   // Handle search
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
-    
+
     if (!cyRef.current || !query.trim()) {
       setSearchResults([]);
-      // Reset highlighting
       if (cyRef.current) {
-        cyRef.current.nodes().removeClass('highlighted dimmed');
-        cyRef.current.edges().removeClass('highlighted dimmed');
+        cyRef.current.nodes().removeClass("highlighted dimmed");
+        cyRef.current.edges().removeClass("highlighted dimmed");
       }
       return;
     }
@@ -137,11 +192,10 @@ export default function Graph() {
     const lowerQuery = query.toLowerCase();
     const matchingNodes: string[] = [];
 
-    // Search by name, company, or role
     cy.nodes().forEach((node) => {
-      const name = (node.data('name') || '').toLowerCase();
-      const company = (node.data('company') || '').toLowerCase();
-      const role = (node.data('role') || '').toLowerCase();
+      const name = (node.data("name") || "").toLowerCase();
+      const company = (node.data("company") || "").toLowerCase();
+      const role = (node.data("role") || "").toLowerCase();
 
       if (name.includes(lowerQuery) || company.includes(lowerQuery) || role.includes(lowerQuery)) {
         matchingNodes.push(node.id());
@@ -150,19 +204,17 @@ export default function Graph() {
 
     setSearchResults(matchingNodes);
 
-    // Highlight matching nodes
     if (matchingNodes.length > 0) {
-      cy.nodes().addClass('dimmed');
-      cy.edges().addClass('dimmed');
+      cy.nodes().addClass("dimmed");
+      cy.edges().addClass("dimmed");
 
       matchingNodes.forEach((nodeId) => {
         const node = cy.getElementById(nodeId);
-        node.removeClass('dimmed').addClass('highlighted');
-        node.connectedEdges().removeClass('dimmed').addClass('highlighted');
+        node.removeClass("dimmed").addClass("highlighted");
+        node.connectedEdges().removeClass("dimmed").addClass("highlighted");
       });
 
-      // Fit to highlighted nodes
-      const highlightedNodes = cy.nodes('.highlighted');
+      const highlightedNodes = cy.nodes(".highlighted");
       if (highlightedNodes.length > 0) {
         cy.fit(highlightedNodes, 100);
       }
@@ -173,63 +225,60 @@ export default function Graph() {
     if (!cyRef.current) return;
 
     const cy = cyRef.current;
-    
-    // Show all elements first
-    cy.elements().style('display', 'element');
+    cy.elements().style("display", "element");
 
-    // Apply search filter
     if (searchResults.length > 0) {
       cy.nodes().forEach((node) => {
         if (!searchResults.includes(node.id())) {
-          node.style('display', 'none');
-          node.connectedEdges().style('display', 'none');
+          node.style("display", "none");
+          node.connectedEdges().style("display", "none");
         }
       });
-      return; // Don't apply other filters when searching
+      return;
     }
 
-    // Apply company filter
     if (selectedCompany !== "all") {
       cy.nodes().forEach((node) => {
-        if (node.data('company') !== selectedCompany) {
-          node.style('display', 'none');
-          // Hide connected edges
-          node.connectedEdges().style('display', 'none');
+        if (node.data("company") !== selectedCompany) {
+          node.style("display", "none");
+          node.connectedEdges().style("display", "none");
         }
       });
     }
 
-    // Apply relationship type filter
     if (selectedRelationType !== "all") {
       cy.edges().forEach((edge) => {
-        if (edge.data('relationshipType') !== selectedRelationType) {
-          edge.style('display', 'none');
+        const edgeType = edge.data("edgeType") || edge.data("relationshipType");
+        if (edgeType !== selectedRelationType) {
+          edge.style("display", "none");
         }
       });
     }
   }, [selectedCompany, selectedRelationType, searchResults]);
 
-  // Get unique relationship types
   const relationshipTypes = useCallback(() => {
-    if (!graphData) return [];
-    const types = new Set<string>();
-    graphData.links.forEach((link: any) => {
-      if (link.relationshipType) types.add(link.relationshipType);
-    });
-    return Array.from(types);
-  }, [graphData]);
+    if (graphMode === "user-centric" && userCentricData) {
+      return Object.keys(userCentricData.stats.edgesByType);
+    }
+    if (graphMode === "relationships" && relationshipsData) {
+      const types = new Set<string>();
+      relationshipsData.links.forEach((link: any) => {
+        if (link.relationshipType) types.add(link.relationshipType);
+      });
+      return Array.from(types);
+    }
+    return [];
+  }, [graphMode, userCentricData, relationshipsData]);
 
-  // Clear filters
   const clearFilters = () => {
     setSelectedCompany("all");
     setSelectedRelationType("all");
   };
 
   const activeFilterCount =
-    (selectedCompany !== "all" ? 1 : 0) +
-    (selectedRelationType !== "all" ? 1 : 0);
+    (selectedCompany !== "all" ? 1 : 0) + (selectedRelationType !== "all" ? 1 : 0);
 
-  // Cytoscape stylesheet - Premium design with indigo accent
+  // Cytoscape stylesheet
   const stylesheet: any[] = [
     {
       selector: "node",
@@ -254,9 +303,17 @@ export default function Graph() {
         "border-opacity": 0.3,
         "overlay-padding": "6px",
         "z-index": 10,
-        // Smooth transitions
         "transition-property": "background-opacity, border-width, width, height",
         "transition-duration": "0.15s",
+      },
+    },
+    {
+      selector: "node[isUser]",
+      style: {
+        "border-width": 4,
+        "border-opacity": 1,
+        "font-weight": "700",
+        "font-size": "13px",
       },
     },
     {
@@ -279,23 +336,30 @@ export default function Graph() {
       selector: "edge",
       style: {
         width: 1.5,
-        "line-color": "#6366f1",
+        "line-color": "data(color)",
         "line-opacity": 0.6,
-        "target-arrow-color": "#6366f1",
+        "target-arrow-color": "data(color)",
         "target-arrow-shape": "triangle",
         "arrow-scale": 0.8,
         "curve-style": "bezier",
-        label: "data(label)",
         "font-size": "9px",
         color: "#64748b",
         "text-rotation": "autorotate",
         "text-margin-y": -8,
-        "text-background-color": "rgba(255, 255, 255, 0.85)",
-        "text-background-opacity": 1,
-        "text-background-padding": "2px",
-        // Smooth transitions
         "transition-property": "width, line-opacity",
         "transition-duration": "0.15s",
+      },
+    },
+    {
+      selector: "edge[edgeType = 'people_also_viewed']",
+      style: {
+        "line-style": "dashed",
+      },
+    },
+    {
+      selector: "edge[edgeType = 'same_company']",
+      style: {
+        "line-style": "dotted",
       },
     },
     {
@@ -333,9 +397,7 @@ export default function Graph() {
       selector: "edge.highlighted",
       style: {
         width: 3,
-        "line-color": "#6366f1",
         "line-opacity": 1,
-        "target-arrow-color": "#6366f1",
       },
     },
     {
@@ -346,74 +408,65 @@ export default function Graph() {
     },
   ];
 
-  // Layout configuration - fCoSE (fast Compound Spring Embedder)
-  const layout = {
-    name: "fcose",
-    // Quality vs Speed
-    quality: "default", // 'draft', 'default' or 'proof'
-    // Use random initial positions for nodes
-    randomize: true,
-    // Whether to animate the layout
-    animate: true,
-    // Duration of animation in ms
-    animationDuration: 1000,
-    // Easing of animation
-    animationEasing: undefined,
-    // Fit the viewport to the repositioned nodes
-    fit: true,
-    // Padding around the simulation
-    padding: 30,
-    // Whether to include labels in node dimensions
-    nodeDimensionsIncludeLabels: true,
-    // Whether to prevent node overlap
-    nodeRepulsion: 4500,
-    // Ideal edge length
-    idealEdgeLength: 50,
-    // Divisor to compute edge forces
-    edgeElasticity: 0.45,
-    // Nesting factor (multiplier) to compute ideal edge length for nested edges
-    nestingFactor: 0.1,
-    // Gravity force (constant)
-    gravity: 0.25,
-    // Maximum number of iterations
-    numIter: 2500,
-    // For enabling tiling
-    tile: true,
-    // Represents the amount of the vertical space to put between the zero degree members during the tiling operation
-    tilingPaddingVertical: 10,
-    // Represents the amount of the horizontal space to put between the zero degree members during the tiling operation
-    tilingPaddingHorizontal: 10,
-    // Gravity range (constant) for compounds
-    gravityRangeCompound: 1.5,
-    // Gravity force (constant) for compounds
-    gravityCompound: 1.0,
-    // Gravity range (constant)
-    gravityRange: 3.8,
-  };
+  // Layout configuration based on mode
+  const getLayout = useCallback(() => {
+    if (graphMode === "user-centric") {
+      return {
+        name: "concentric",
+        concentric: (node: any) => {
+          if (node.data("isUser")) return 1000;
+          return 1000 - (node.data("degree") || 1) * 100;
+        },
+        levelWidth: () => 2,
+        minNodeSpacing: 60,
+        animate: true,
+        animationDuration: 800,
+        fit: true,
+        padding: 50,
+      };
+    }
+    return {
+      name: "fcose",
+      quality: "default",
+      randomize: true,
+      animate: true,
+      animationDuration: 1000,
+      fit: true,
+      padding: 30,
+      nodeDimensionsIncludeLabels: true,
+      nodeRepulsion: 4500,
+      idealEdgeLength: 50,
+      edgeElasticity: 0.45,
+      nestingFactor: 0.1,
+      gravity: 0.25,
+      numIter: 2500,
+      tile: true,
+    };
+  }, [graphMode]);
 
   // Initialize Cytoscape instance
   const handleCyInit = useCallback(
     (cy: cytoscape.Core) => {
       cyRef.current = cy;
 
-      // Context menus
       (cy as any).contextMenus({
         menuItems: [
           {
             id: "view-profile",
             content: "View Profile",
-            selector: "node",
+            selector: "node[!isUser]",
             onClickFunction: (event: any) => {
               const nodeId = event.target.id();
-              setLocation(`/contacts/${nodeId}`);
+              if (nodeId !== "user") {
+                setLocation(`/contacts/${nodeId}`);
+              }
             },
           },
           {
             id: "add-relationship",
             content: "Add Relationship",
-            selector: "node",
+            selector: "node[!isUser]",
             onClickFunction: (event: any) => {
-              // TODO: Open relationship dialog
               console.log("Add relationship for", event.target.data("name"));
             },
           },
@@ -422,12 +475,12 @@ export default function Graph() {
             content: "---",
             selector: "node",
             disabled: true,
-            onClickFunction: () => {}, // Required even for disabled items
+            onClickFunction: () => {},
           },
           {
             id: "hide-node",
             content: "Hide Contact",
-            selector: "node",
+            selector: "node[!isUser]",
             onClickFunction: (event: any) => {
               event.target.style("display", "none");
             },
@@ -435,56 +488,57 @@ export default function Graph() {
         ],
       });
 
-         // Hover tooltips (native implementation)
+      // Hover tooltips
       cy.on("mouseover", "node", (event) => {
         const node = event.target;
         const data = node.data();
 
-        // Remove existing tooltip
         if (tooltipRef.current) {
           tooltipRef.current.remove();
           tooltipRef.current = null;
         }
 
-        // Create tooltip
         const tooltip = document.createElement("div");
         tooltip.className =
           "absolute z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 text-sm pointer-events-none";
-        tooltip.innerHTML = `
-          <div class="font-semibold text-gray-900 dark:text-white">${data.name}</div>
-          ${data.company ? `<div class="text-gray-600 dark:text-gray-400">${data.company}</div>` : ""}
-          ${data.role ? `<div class="text-gray-500 dark:text-gray-500 text-xs">${data.role}</div>` : ""}
-          <div class="text-gray-500 dark:text-gray-500 text-xs mt-1">${data.connections} connections</div>
-        `;
 
-        // Add to container
+        if (data.isUser) {
+          tooltip.innerHTML = `
+            <div class="font-semibold text-gray-900 dark:text-white">You</div>
+            <div class="text-gray-500 dark:text-gray-500 text-xs mt-1">Center of your network</div>
+          `;
+        } else {
+          tooltip.innerHTML = `
+            <div class="font-semibold text-gray-900 dark:text-white">${data.name}</div>
+            ${data.company ? `<div class="text-gray-600 dark:text-gray-400">${data.company}</div>` : ""}
+            ${data.role ? `<div class="text-gray-500 dark:text-gray-500 text-xs">${data.role}</div>` : ""}
+            <div class="text-gray-500 dark:text-gray-500 text-xs mt-1">
+              ${data.followers ? `${data.followers.toLocaleString()} followers` : ""}
+              ${data.followers && data.connections ? " · " : ""}
+              ${data.connections ? `${data.connections} connections` : ""}
+            </div>
+            ${data.degree ? `<div class="text-xs mt-1 text-indigo-600">Degree ${data.degree}</div>` : ""}
+          `;
+        }
+
         const container = cy.container();
         if (container) {
           container.appendChild(tooltip);
           tooltipRef.current = tooltip;
 
-          // Position tooltip function
           const updateTooltipPosition = () => {
             const renderedPosition = node.renderedPosition();
-            const zoom = cy.zoom();
-            const pan = cy.pan();
-            
-            // Calculate position (above the node)
             const x = renderedPosition.x;
-            const y = renderedPosition.y - (data.size / 2) * zoom - 10;
-            
+            const y = renderedPosition.y - (data.size / 2) * cy.zoom() - 10;
+
             tooltip.style.left = `${x}px`;
             tooltip.style.top = `${y}px`;
             tooltip.style.transform = "translate(-50%, -100%)";
           };
 
-          // Initial position
           updateTooltipPosition();
-
-          // Update position on viewport changes
           cy.on("pan zoom resize", updateTooltipPosition);
 
-          // Cleanup on mouseout
           node.once("mouseout", () => {
             cy.off("pan zoom resize", updateTooltipPosition);
             if (tooltipRef.current) {
@@ -495,7 +549,6 @@ export default function Graph() {
         }
       });
 
-      // Apply filters after layout
       cy.ready(() => {
         applyFilters();
       });
@@ -503,15 +556,12 @@ export default function Graph() {
     [setLocation, applyFilters]
   );
 
-  // Reapply filters when they change
   useEffect(() => {
     applyFilters();
   }, [selectedCompany, selectedRelationType, applyFilters]);
 
-  // Toggle fullscreen
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
-
     if (!isFullscreen) {
       containerRef.current.requestFullscreen?.();
     } else {
@@ -523,19 +573,18 @@ export default function Graph() {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
     };
-
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     return () => {
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
     };
   }, []);
 
-  if (authLoading || isLoading) {
+  if (authLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading your network...</p>
+          <p className="text-muted-foreground">Loading...</p>
         </div>
       </div>
     );
@@ -550,7 +599,7 @@ export default function Graph() {
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground mb-4">
-              Please sign in to view your knowledge graph.
+              Please sign in to view your network.
             </p>
             <Button asChild className="w-full">
               <a href={getLoginUrl()}>Sign In</a>
@@ -571,16 +620,40 @@ export default function Graph() {
           <div className="flex-1">
             <h1 className="text-3xl font-bold">Your network</h1>
             <p className="text-muted-foreground">
-              Visualize connections and discover paths
+              {graphMode === "user-centric"
+                ? "You at the center, expanding outward"
+                : "Visualize connections and discover paths"}
             </p>
           </div>
           <div className="flex gap-2 items-center">
+            {/* Mode Toggle */}
+            <div className="flex border rounded-lg overflow-hidden">
+              <Button
+                variant={graphMode === "user-centric" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setGraphMode("user-centric")}
+                className="rounded-none"
+              >
+                <Users className="h-4 w-4 mr-2" />
+                My Network
+              </Button>
+              <Button
+                variant={graphMode === "relationships" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setGraphMode("relationships")}
+                className="rounded-none"
+              >
+                <Network className="h-4 w-4 mr-2" />
+                Relationships
+              </Button>
+            </div>
+
             {/* Search Bar */}
-            <div className="relative w-64">
+            <div className="relative w-48">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 type="text"
-                placeholder="Search contacts..."
+                placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => handleSearch(e.target.value)}
                 className="pl-10 pr-10"
@@ -596,16 +669,14 @@ export default function Graph() {
                 </Button>
               )}
             </div>
+
             {searchResults.length > 0 && (
               <Badge variant="secondary">
-                {searchResults.length} {searchResults.length === 1 ? 'result' : 'results'}
+                {searchResults.length} {searchResults.length === 1 ? "result" : "results"}
               </Badge>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowFilters(!showFilters)}
-            >
+
+            <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)}>
               <Filter className="h-4 w-4 mr-2" />
               Filters
               {activeFilterCount > 0 && (
@@ -614,16 +685,9 @@ export default function Graph() {
                 </Badge>
               )}
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={toggleFullscreen}
-            >
-              {isFullscreen ? (
-                <Minimize2 className="h-4 w-4" />
-              ) : (
-                <Maximize2 className="h-4 w-4" />
-              )}
+
+            <Button variant="outline" size="sm" onClick={toggleFullscreen}>
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </Button>
           </div>
         </div>
@@ -634,13 +698,8 @@ export default function Graph() {
             <CardContent className="pt-6">
               <div className="flex flex-wrap gap-4 items-end">
                 <div className="flex-1 min-w-[200px]">
-                  <label className="text-sm font-medium mb-2 block">
-                    Company
-                  </label>
-                  <Select
-                    value={selectedCompany}
-                    onValueChange={setSelectedCompany}
-                  >
+                  <label className="text-sm font-medium mb-2 block">Company</label>
+                  <Select value={selectedCompany} onValueChange={setSelectedCompany}>
                     <SelectTrigger>
                       <SelectValue placeholder="All companies" />
                     </SelectTrigger>
@@ -656,13 +715,8 @@ export default function Graph() {
                 </div>
 
                 <div className="flex-1 min-w-[200px]">
-                  <label className="text-sm font-medium mb-2 block">
-                    Relationship Type
-                  </label>
-                  <Select
-                    value={selectedRelationType}
-                    onValueChange={setSelectedRelationType}
-                  >
+                  <label className="text-sm font-medium mb-2 block">Edge Type</label>
+                  <Select value={selectedRelationType} onValueChange={setSelectedRelationType}>
                     <SelectTrigger>
                       <SelectValue placeholder="All types" />
                     </SelectTrigger>
@@ -670,7 +724,7 @@ export default function Graph() {
                       <SelectItem value="all">All types</SelectItem>
                       {relationshipTypes().map((type) => (
                         <SelectItem key={type} value={type}>
-                          {type}
+                          {type.replace(/_/g, " ")}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -678,51 +732,83 @@ export default function Graph() {
                 </div>
 
                 {activeFilterCount > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={clearFilters}
-                  >
+                  <Button variant="ghost" size="sm" onClick={clearFilters}>
                     <X className="h-4 w-4 mr-2" />
                     Clear Filters
                   </Button>
                 )}
               </div>
-
-              {/* Active filters */}
-              {activeFilterCount > 0 && (
-                <div className="flex flex-wrap gap-2 mt-4">
-                  {selectedCompany !== "all" && (
-                    <Badge variant="secondary">
-                      Company: {selectedCompany}
-                      <button
-                        className="ml-2"
-                        onClick={() => setSelectedCompany("all")}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  )}
-                  {selectedRelationType !== "all" && (
-                    <Badge variant="secondary">
-                      Type: {selectedRelationType}
-                      <button
-                        className="ml-2"
-                        onClick={() => setSelectedRelationType("all")}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  )}
-                </div>
-              )}
             </CardContent>
           </Card>
         )}
 
         {/* Graph */}
-        <Card>
+        <Card className="relative">
           <CardContent className="p-0">
+            {/* Loading indicator */}
+            {isLoading && (
+              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 z-50">
+                <div className="flex items-center gap-3">
+                  <div className="animate-spin h-5 w-5 border-2 border-indigo-500 border-t-transparent rounded-full" />
+                  <span className="text-sm text-muted-foreground">Building your network graph...</span>
+                </div>
+              </div>
+            )}
+
+            {/* Legend */}
+            {graphMode === "user-centric" && !isLoading && elements.length > 0 && (
+              <div className="absolute bottom-4 right-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 z-40 text-xs">
+                <h4 className="font-medium text-sm mb-2">Legend</h4>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: DEGREE_COLORS[0] }} />
+                    <span>You</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: DEGREE_COLORS[1] }} />
+                    <span>Direct Contacts</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: DEGREE_COLORS[2] }} />
+                    <span>2nd Degree</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: DEGREE_COLORS[3] }} />
+                    <span>3rd Degree</span>
+                  </div>
+                  <div className="border-t pt-2 mt-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-0.5" style={{ backgroundColor: EDGE_TYPE_COLORS.direct_contact }} />
+                      <span>Direct</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-6 h-0.5"
+                        style={{
+                          backgroundColor: EDGE_TYPE_COLORS.people_also_viewed,
+                          backgroundImage: "repeating-linear-gradient(90deg, transparent, transparent 2px, #10b981 2px, #10b981 4px)",
+                        }}
+                      />
+                      <span>LinkedIn</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-6 h-0.5"
+                        style={{ backgroundColor: EDGE_TYPE_COLORS.same_company }}
+                      />
+                      <span>Same Company</span>
+                    </div>
+                  </div>
+                </div>
+                {userCentricData?.stats && (
+                  <div className="border-t pt-2 mt-2 text-muted-foreground">
+                    <div>{userCentricData.stats.totalNodes} nodes</div>
+                    <div>{userCentricData.edges.length} connections</div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div
               style={{
                 height: isFullscreen ? "100vh" : "calc(100vh - 300px)",
@@ -731,9 +817,10 @@ export default function Graph() {
             >
               {elements.length > 0 ? (
                 <CytoscapeComponent
+                  key={graphMode} // Force re-render on mode change
                   elements={elements}
                   stylesheet={stylesheet}
-                  layout={layout}
+                  layout={getLayout()}
                   cy={handleCyInit}
                   style={{ width: "100%", height: "100%" }}
                   wheelSensitivity={0.2}
@@ -741,12 +828,21 @@ export default function Graph() {
               ) : (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
-                    <p className="text-muted-foreground mb-4">
-                      No connections in your network yet
-                    </p>
-                    <Button onClick={() => setLocation("/contacts")}>
-                      Add Contacts
-                    </Button>
+                    {isLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
+                        <p className="text-muted-foreground">Loading your network...</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-muted-foreground mb-4">
+                          {graphMode === "user-centric"
+                            ? "Add contacts with LinkedIn data to build your network"
+                            : "No connections in your network yet"}
+                        </p>
+                        <Button onClick={() => setLocation("/contacts")}>Add Contacts</Button>
+                      </>
+                    )}
                   </div>
                 </div>
               )}

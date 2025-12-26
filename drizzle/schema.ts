@@ -249,6 +249,28 @@ export type ContactRelationship = typeof contactRelationships.$inferSelect;
 export type InsertContactRelationship = typeof contactRelationships.$inferInsert;
 
 /**
+ * Inferred edges table - stores computed connections between contacts
+ * Edges are inferred from LinkedIn data (peopleAlsoViewed) and shared attributes
+ * Used for user-centric network graph visualization
+ */
+export const inferredEdges = mysqlTable("inferredEdges", {
+  id: int("id").autoincrement().primaryKey(),
+  fromContactId: int("fromContactId").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  toContactId: int("toContactId").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  edgeType: varchar("edgeType", { length: 50 }).notNull(), // 'people_also_viewed', 'same_company', 'same_school', 'shared_skills'
+  strength: int("strength").default(1), // Number of matching attributes
+  metadata: text("metadata"), // JSON with match details
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  fromIdx: index("idx_inferred_from").on(table.fromContactId),
+  toIdx: index("idx_inferred_to").on(table.toContactId),
+  typeIdx: index("idx_inferred_type").on(table.edgeType),
+}));
+
+export type InferredEdge = typeof inferredEdges.$inferSelect;
+export type InsertInferredEdge = typeof inferredEdges.$inferInsert;
+
+/**
  * Contact photos table - stores multiple photos per contact
  */
 export const contactPhotos = mysqlTable("contactPhotos", {

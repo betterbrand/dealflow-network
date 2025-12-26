@@ -157,7 +157,16 @@ export async function enrichContactBackground(
     console.log(`[Enrichment] Saved: ${enrichedData.experience?.length || 0} experience, ${enrichedData.education?.length || 0} education, ${enrichedData.skills?.length || 0} skills`);
     console.log(`[Enrichment] Social: ${enrichedData.followers || 0} followers, ${enrichedData.connections || 0} connections`);
     console.log(`[Enrichment] Content: ${enrichedData.posts?.length || 0} posts, ${enrichedData.activity?.length || 0} activity, ${enrichedData.peopleAlsoViewed?.length || 0} network suggestions`);
-    
+
+    // Compute inferred edges for the network graph
+    try {
+      const { computeInferredEdgesForContact } = await import("./services/inferred-edges.service");
+      const edgesCreated = await computeInferredEdgesForContact(contactId);
+      console.log(`[Enrichment] Created ${edgesCreated} inferred edges for contact ${contactId}`);
+    } catch (edgeError) {
+      console.warn(`[Enrichment] Failed to compute inferred edges for contact ${contactId}:`, edgeError);
+    }
+
   } catch (error) {
     console.error(`[Enrichment] Failed to enrich contact ${contactId}:`, error);
   }
