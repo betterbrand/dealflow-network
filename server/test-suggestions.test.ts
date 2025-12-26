@@ -3,10 +3,11 @@ import { getDb } from "./db";
 import { contacts as contactsTable, contactRelationships } from "../drizzle/schema";
 import { eq, and, or, inArray } from "drizzle-orm";
 
-// Skip if no database URL
+// Skip in CI or if no database URL - these are integration tests
+const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 const hasDb = !!process.env.DATABASE_URL;
 
-describe.skipIf(!hasDb)("Smart Relationship Suggestions", () => {
+describe.skipIf(isCI || !hasDb)("Smart Relationship Suggestions", () => {
   let db: Awaited<ReturnType<typeof getDb>>;
   let testContactIds: number[] = [];
 

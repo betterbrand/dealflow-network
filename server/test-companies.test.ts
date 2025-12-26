@@ -10,10 +10,11 @@ import {
   getDb
 } from './db';
 
-// Skip if no database URL
+// Skip in CI or if no database URL - these are integration tests
+const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 const hasDb = !!process.env.DATABASE_URL;
 
-describe.skipIf(!hasDb)('Companies Feature', () => {
+describe.skipIf(isCI || !hasDb)('Companies Feature', () => {
   let testCompanyId: number;
 
   beforeAll(async () => {

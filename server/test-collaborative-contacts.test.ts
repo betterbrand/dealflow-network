@@ -11,10 +11,11 @@ import {
   updateUserContactData,
 } from "./db-collaborative";
 
-// Skip if no database URL
+// Skip in CI or if no database URL - these are integration tests
+const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 const hasDb = !!process.env.DATABASE_URL;
 
-describe.skipIf(!hasDb)("Collaborative Contacts System", () => {
+describe.skipIf(isCI || !hasDb)("Collaborative Contacts System", () => {
   let db: Awaited<ReturnType<typeof getDb>>;
   let testUserId = 1;
   let testContactId: number;

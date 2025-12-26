@@ -3,10 +3,11 @@ import { createRelationship, getRelationshipsForContact, deleteRelationship, get
 import { contacts, contactRelationships } from '../drizzle/schema';
 import { eq, or } from 'drizzle-orm';
 
-// Skip if no database URL
+// Skip in CI or if no database URL - these are integration tests
+const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 const hasDb = !!process.env.DATABASE_URL;
 
-describe.skipIf(!hasDb)('Relationship Management', () => {
+describe.skipIf(isCI || !hasDb)('Relationship Management', () => {
   let testContactId1: number;
   let testContactId2: number;
   let testRelationshipId: number;

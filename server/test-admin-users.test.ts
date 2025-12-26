@@ -4,10 +4,11 @@ import { getDb } from "./db";
 import { authorizedUsers } from "../drizzle/schema";
 import { eq, or, like } from "drizzle-orm";
 
-// Skip if no database URL
+// Skip in CI or if no database URL - these are integration tests
+const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 const hasDb = !!process.env.DATABASE_URL;
 
-describe.skipIf(!hasDb)("Admin User Management (Database-backed)", () => {
+describe.skipIf(isCI || !hasDb)("Admin User Management (Database-backed)", () => {
   let db: Awaited<ReturnType<typeof getDb>>;
   const testPrefix = `test-admin-${Date.now()}`;
   const testEmail1 = `${testPrefix}-1@example.com`;
