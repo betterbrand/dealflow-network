@@ -343,3 +343,105 @@ export const rdfTriples = mysqlTable("rdfTriples", {
 
 export type RdfTriple = typeof rdfTriples.$inferSelect;
 export type InsertRdfTriple = typeof rdfTriples.$inferInsert;
+
+/**
+ * Agent Sessions table - tracks autonomous agent runs
+ * Sessions can be background scans or conversational interactions
+ */
+export const agentSessions = mysqlTable("agentSessions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+
+  // Session type and goal
+  sessionType: varchar("sessionType", { length: 50 }).notNull(), // "background_scan", "conversational"
+  goal: text("goal"), // Natural language goal or query
+
+  // State management
+  status: varchar("status", { length: 20 }).default("running"), // "running", "paused", "completed", "failed"
+  stateJson: text("stateJson"), // Serialized agent state (explored nodes, pending, etc.)
+
+  // Progress tracking
+  findingsCount: int("findingsCount").default(0),
+
+  // Timing
+  startedAt: timestamp("startedAt").defaultNow(),
+  pausedAt: timestamp("pausedAt"),
+  completedAt: timestamp("completedAt"),
+  lastActivityAt: timestamp("lastActivityAt").defaultNow(),
+
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index("idx_agent_session_user").on(table.userId),
+  statusIdx: index("idx_agent_session_status").on(table.status),
+}));
+
+export type AgentSession = typeof agentSessions.$inferSelect;
+export type InsertAgentSession = typeof agentSessions.$inferInsert;
+
+/**
+ * Agent Findings table - stores discovered connections and insights
+ * Each finding represents a potential relationship or introduction path
+ */
+export const agentFindings = mysqlTable("agentFindings", {
+  id: int("id").autoincrement().primaryKey(),
+  sessionId: int("sessionId").notNull().references(() => agentSessions.id, { onDelete: "cascade" }),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+
+  // Finding type
+  findingType: varchar("findingType", { length: 50 }).notNull(), // "connection", "introduction_path", "insight"
+
+  // Connection findings
+  fromContactId: int("fromContactId").references(() => contacts.id, { onDelete: "cascade" }),
+  toContactId: int("toContactId").references(() => contacts.id, { onDelete: "cascade" }),
+
+  // Details
+  inferenceMethod: varchar("inferenceMethod", { length: 50 }), // "mutual_connection", "llm_reasoning", "career_overlap"
+  confidence: int("confidence").notNull(), // 0-100 scale
+  reasoning: text("reasoning").notNull(),
+  evidenceJson: text("evidenceJson"), // Supporting evidence
+
+  // For path findings
+  pathJson: text("pathJson"), // JSON array of contact IDs in path
+  pathLength: int("pathLength"),
+
+  // User interaction
+  status: varchar("status", { length: 20 }).default("pending"), // "pending", "confirmed", "dismissed"
+  reviewedAt: timestamp("reviewedAt"),
+
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index("idx_agent_finding_user").on(table.userId),
+  sessionIdx: index("idx_agent_finding_session").on(table.sessionId),
+  statusIdx: index("idx_agent_finding_status").on(table.status),
+}));
+
+export type AgentFinding = typeof agentFindings.$inferSelect;
+export type InsertAgentFinding = typeof agentFindings.$inferInsert;
+
+/**
+ * Agent Conversations table - stores chat history with humanization metadata
+ * Tracks sentiment, tone, and reasoning for each message
+ */
+export const agentConversations = mysqlTable("agentConversations", {
+  id: int("id").autoincrement().primaryKey(),
+  sessionId: int("sessionId").notNull().references(() => agentSessions.id, { onDelete: "cascade" }),
+
+  // Message content
+  role: varchar("role", { length: 20 }).notNull(), // "user", "agent"
+  content: text("content").notNull(),
+
+  // Humanization metadata
+  sentiment: varchar("sentiment", { length: 20 }), // Detected user sentiment: "neutral", "positive", "frustrated", "confused", "urgent"
+  tone: varchar("tone", { length: 20 }), // Agent tone used: "neutral", "empathetic", "excited", "curious", "cautious"
+  intentType: varchar("intentType", { length: 50 }), // Parsed intent type
+
+  // Transparency
+  reasoningTrace: text("reasoningTrace"), // Agent's internal reasoning (for debugging/transparency)
+
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  sessionIdx: index("idx_agent_conv_session").on(table.sessionId),
+}));
+
+export type AgentConversation = typeof agentConversations.$inferSelect;
+export type InsertAgentConversation = typeof agentConversations.$inferInsert;
