@@ -229,85 +229,119 @@ export default function Graph() {
     (selectedCompany !== "all" ? 1 : 0) +
     (selectedRelationType !== "all" ? 1 : 0);
 
-  // Cytoscape stylesheet
+  // Cytoscape stylesheet - Premium design with indigo accent
   const stylesheet: any[] = [
     {
       selector: "node",
       style: {
         "background-color": "data(color)",
+        "background-opacity": 0.9,
         width: "data(size)",
         height: "data(size)",
         label: "data(label)",
-        "text-valign": "center",
+        "text-valign": "bottom",
         "text-halign": "center",
-        "font-size": "12px",
-        "font-weight": "bold",
-        color: "#fff",
-        "text-outline-width": 2,
-        "text-outline-color": "data(color)",
+        "text-margin-y": 8,
+        "font-size": "11px",
+        "font-weight": "500",
+        color: "#1e293b",
+        "text-background-color": "rgba(255, 255, 255, 0.9)",
+        "text-background-opacity": 1,
+        "text-background-padding": "4px",
+        "text-background-shape": "roundrectangle",
+        "border-width": 2,
+        "border-color": "data(color)",
+        "border-opacity": 0.3,
         "overlay-padding": "6px",
         "z-index": 10,
+        // Smooth transitions
+        "transition-property": "background-opacity, border-width, width, height",
+        "transition-duration": "0.15s",
+      },
+    },
+    {
+      selector: "node:active",
+      style: {
+        "border-width": 3,
+        "background-opacity": 1,
       },
     },
     {
       selector: "node:selected",
       style: {
-        "border-width": 3,
-        "border-color": "#000",
+        "border-width": 4,
+        "border-color": "#6366f1",
+        "border-opacity": 1,
         "overlay-opacity": 0,
       },
     },
     {
       selector: "edge",
       style: {
-        width: 2,
-        "line-color": "#94a3b8",
-        "target-arrow-color": "#94a3b8",
+        width: 1.5,
+        "line-color": "#6366f1",
+        "line-opacity": 0.6,
+        "target-arrow-color": "#6366f1",
         "target-arrow-shape": "triangle",
+        "arrow-scale": 0.8,
         "curve-style": "bezier",
         label: "data(label)",
-        "font-size": "10px",
+        "font-size": "9px",
         color: "#64748b",
         "text-rotation": "autorotate",
-        "text-margin-y": -10,
+        "text-margin-y": -8,
+        "text-background-color": "rgba(255, 255, 255, 0.85)",
+        "text-background-opacity": 1,
+        "text-background-padding": "2px",
+        // Smooth transitions
+        "transition-property": "width, line-opacity",
+        "transition-duration": "0.15s",
+      },
+    },
+    {
+      selector: "edge:hover",
+      style: {
+        width: 2.5,
+        "line-opacity": 1,
       },
     },
     {
       selector: "edge:selected",
       style: {
         width: 3,
-        "line-color": "#3b82f6",
-        "target-arrow-color": "#3b82f6",
+        "line-color": "#4f46e5",
+        "line-opacity": 1,
+        "target-arrow-color": "#4f46e5",
       },
     },
     {
       selector: "node.highlighted",
       style: {
         "border-width": 4,
-        "border-color": "#fbbf24",
-        "border-style": "solid",
-        opacity: 1,
+        "border-color": "#6366f1",
+        "border-opacity": 1,
+        "background-opacity": 1,
       },
     },
     {
       selector: "node.dimmed",
       style: {
-        opacity: 0.3,
+        opacity: 0.25,
       },
     },
     {
       selector: "edge.highlighted",
       style: {
         width: 3,
-        "line-color": "#fbbf24",
-        "target-arrow-color": "#fbbf24",
-        opacity: 1,
+        "line-color": "#6366f1",
+        "line-opacity": 1,
+        "target-arrow-color": "#6366f1",
       },
     },
     {
       selector: "edge.dimmed",
       style: {
-        opacity: 0.2,
+        opacity: 0.15,
       },
     },
   ];
@@ -535,9 +569,9 @@ export default function Graph() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex-1">
-            <h1 className="text-3xl font-bold">Knowledge Graph</h1>
+            <h1 className="text-3xl font-bold">Your network</h1>
             <p className="text-muted-foreground">
-              Visualize your network connections
+              Visualize connections and discover paths
             </p>
           </div>
           <div className="flex gap-2 items-center">
@@ -546,7 +580,7 @@ export default function Graph() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 type="text"
-                placeholder="Search by name, company, or role..."
+                placeholder="Search contacts..."
                 value={searchQuery}
                 onChange={(e) => handleSearch(e.target.value)}
                 className="pl-10 pr-10"

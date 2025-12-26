@@ -1,7 +1,17 @@
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Mail, Phone, MapPin, Building2, Calendar, User, Linkedin, Twitter, Plus, ExternalLink, Briefcase, GraduationCap, FileText, Users, Download, RefreshCw, Loader2, CheckCircle, XCircle, Lightbulb, Database, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, Building2, Calendar, User, Linkedin, Twitter, Plus, ExternalLink, Briefcase, GraduationCap, FileText, Users, Download, RefreshCw, Loader2, CheckCircle, XCircle, Lightbulb, Trash2, Database, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Link, useParams, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -27,6 +37,7 @@ export default function ContactDetail() {
   const [showAddRelationshipDialog, setShowAddRelationshipDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [importStep, setImportStep] = useState<'provider' | 'loading' | 'preview' | 'success'>('provider');
   const [linkedinUrl, setLinkedinUrl] = useState('');
   const [selectedProvider, setSelectedProvider] = useState<'scrapingdog' | 'brightdata'>('scrapingdog');
@@ -34,6 +45,7 @@ export default function ContactDetail() {
   const [importCompany, setImportCompany] = useState(false);
   const [showSemanticData, setShowSemanticData] = useState(false);
 
+  const utils = trpc.useUtils();
   const { data: contact, isLoading, refetch } = trpc.contacts.get.useQuery({ id: contactId });
   const { data: relationships, refetch: refetchRelationships } = trpc.relationships.getForContact.useQuery({ contactId });
   const { data: availableProviders } = trpc.contacts.getAvailableProviders.useQuery();
@@ -44,6 +56,13 @@ export default function ContactDetail() {
 
   const getImportPreviewMutation = trpc.contacts.getImportPreview.useMutation();
   const confirmImportMutation = trpc.contacts.confirmImport.useMutation();
+  const deleteContactMutation = trpc.contacts.delete.useMutation({
+    onSuccess: () => {
+      utils.contacts.list.invalidate();
+      utils.contacts.search.invalidate();
+      setLocation("/contacts");
+    },
+  });
 
   // Parse JSON fields
   const experience = contact?.experience ? JSON.parse(contact.experience) : [];
@@ -669,23 +688,32 @@ export default function ContactDetail() {
           {/* Quick Actions */}
           <Card>
             <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
+              <CardTitle>Quick actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <Button variant="outline" className="w-full justify-start" asChild>
                 <Link href="/graph">
                   <Building2 className="mr-2 h-4 w-4" />
-                  View in Graph
+                  View in graph
                 </Link>
               </Button>
               {contact.email && (
                 <Button variant="outline" className="w-full justify-start" asChild>
                   <a href={`mailto:${contact.email}`}>
                     <Mail className="mr-2 h-4 w-4" />
-                    Send Email
+                    Send email
                   </a>
                 </Button>
               )}
+              <Separator className="my-3" />
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={() => setShowDeleteDialog(true)}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete contact
+              </Button>
             </CardContent>
           </Card>
 
@@ -989,6 +1017,32 @@ export default function ContactDetail() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this contact?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {contact.name} and all their relationships. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteContactMutation.mutate({ id: contactId })}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteContactMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" />
+              )}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

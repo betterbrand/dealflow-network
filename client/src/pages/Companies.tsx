@@ -18,16 +18,34 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Plus, Search, Users, ExternalLink } from "lucide-react";
+import { Building2, Plus, Search, Users, ExternalLink, Trash2, Loader2 } from "lucide-react";
 import { CreateCompanyDialog } from "@/components/CreateCompanyDialog";
 
 export default function Companies() {
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [companyToDelete, setCompanyToDelete] = useState<{ id: number; name: string } | null>(null);
 
+  const utils = trpc.useUtils();
   const { data: companies, isLoading } = trpc.companies.listWithStats.useQuery();
+  const deleteCompanyMutation = trpc.companies.delete.useMutation({
+    onSuccess: () => {
+      utils.companies.listWithStats.invalidate();
+      setCompanyToDelete(null);
+    },
+  });
 
   const filteredCompanies = companies?.filter((company) =>
     company.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -161,16 +179,29 @@ export default function Companies() {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setLocation(`/companies/${company.id}`);
-                      }}
-                    >
-                      View Details
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLocation(`/companies/${company.id}`);
+                        }}
+                      >
+                        View
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCompanyToDelete({ id: company.id, name: company.name });
+                        }}
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -201,6 +232,32 @@ export default function Companies() {
         open={isCreateDialogOpen}
         onOpenChange={setIsCreateDialogOpen}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!companyToDelete} onOpenChange={() => setCompanyToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this company?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {companyToDelete?.name}. Contacts associated with this company will not be deleted. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => companyToDelete && deleteCompanyMutation.mutate({ id: companyToDelete.id })}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteCompanyMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" />
+              )}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
