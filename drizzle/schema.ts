@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { index, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -292,3 +292,32 @@ export const authorizedUsers = mysqlTable("authorizedUsers", {
 
 export type AuthorizedUser = typeof authorizedUsers.$inferSelect;
 export type InsertAuthorizedUser = typeof authorizedUsers.$inferInsert;
+
+/**
+ * RDF Triples table - persistent storage for semantic graph data
+ * Stores subject-predicate-object triples derived from LinkedIn profiles
+ * Used for SPARQL-like queries and semantic relationship traversal
+ */
+export const rdfTriples = mysqlTable("rdfTriples", {
+  id: int("id").autoincrement().primaryKey(),
+
+  // Triple components (subject-predicate-object)
+  subject: varchar("subject", { length: 512 }).notNull(),    // e.g., "linkedin:satyanadella"
+  predicate: varchar("predicate", { length: 512 }).notNull(), // e.g., "https://schema.org/name"
+  object: text("object").notNull(),                           // e.g., "Satya Nadella" or "org:microsoft"
+  objectType: varchar("objectType", { length: 20 }).notNull(), // "literal" | "uri"
+
+  // Source tracking - which contact this triple belongs to
+  contactId: int("contactId").references(() => contacts.id, { onDelete: "cascade" }),
+
+  // Metadata
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  // Indexes for fast queries
+  subjectIdx: index("idx_rdf_subject").on(table.subject),
+  predicateIdx: index("idx_rdf_predicate").on(table.predicate),
+  contactIdx: index("idx_rdf_contact").on(table.contactId),
+}));
+
+export type RdfTriple = typeof rdfTriples.$inferSelect;
+export type InsertRdfTriple = typeof rdfTriples.$inferInsert;

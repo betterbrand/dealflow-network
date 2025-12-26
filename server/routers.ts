@@ -295,6 +295,47 @@ export const appRouter = router({
             .where(eq(contacts.id, input.contactId));
         }
 
+        // Generate and persist semantic graph (RDF triples)
+        try {
+          const { transformLinkedInToSemanticGraph } = await import("./_core/semantic-transformer");
+          const { loadSemanticGraph } = await import("./_core/sparql");
+
+          const profile = {
+            name: data.name || data.firstName + ' ' + data.lastName,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            headline: role,
+            position: role,
+            location: data.location,
+            city: data.city,
+            countryCode: data.countryCode,
+            summary: data.summary,
+            profilePictureUrl: data.profilePictureUrl,
+            bannerImage: data.bannerImage,
+            followers: data.followers,
+            connections: data.connections,
+            linkedinId: data.linkedinId,
+            linkedinNumId: data.linkedinNumId,
+            experience: data.experience || [],
+            education: data.education || [],
+            skills: data.skills || [],
+            bioLinks: data.bioLinks,
+            peopleAlsoViewed: data.peopleAlsoViewed,
+          };
+
+          const semanticGraph = transformLinkedInToSemanticGraph(
+            profile,
+            input.linkedinUrl || `internal:contact-${input.contactId}`,
+            { source: "LinkedIn", timestamp: new Date() }
+          );
+
+          await loadSemanticGraph(semanticGraph, input.contactId);
+          console.log(`[confirmImport] Saved semantic graph for contact ${input.contactId}`);
+        } catch (error) {
+          console.error('[confirmImport] Failed to save semantic graph:', error);
+          // Don't fail the import - triples are secondary
+        }
+
         return {
           success: true,
           companyId,
@@ -891,6 +932,27 @@ export const appRouter = router({
       const { getGraphStats } = await import("./_core/sparql");
       return getGraphStats();
     }),
+
+    // Get triples for a specific contact (from DB)
+    getContactTriples: protectedProcedure
+      .input(z.object({ contactId: z.number() }))
+      .query(async ({ input }) => {
+        const { getContactTriples, formatPredicate, groupTriplesByPredicate } = await import("./_core/triple-store");
+        const triples = await getContactTriples(input.contactId);
+
+        return {
+          tripleCount: triples.length,
+          triples: triples.map(t => ({
+            id: t.id,
+            subject: t.subject.split("/").pop() || t.subject,
+            predicate: formatPredicate(t.predicate),
+            predicateFull: t.predicate,
+            object: t.object,
+            objectType: t.objectType,
+          })),
+          grouped: groupTriplesByPredicate(triples),
+        };
+      }),
 
     // Re-enrich contact and load semantic graph
     // Phase 1: Semantic graphs are loaded automatically during LinkedIn enrichment

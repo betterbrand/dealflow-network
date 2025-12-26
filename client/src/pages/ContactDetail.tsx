@@ -1,7 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Mail, Phone, MapPin, Building2, Calendar, User, Linkedin, Twitter, Plus, ExternalLink, Briefcase, GraduationCap, FileText, Users, Download, RefreshCw, Loader2, CheckCircle, XCircle, Lightbulb, Trash2 } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, Building2, Calendar, User, Linkedin, Twitter, Plus, ExternalLink, Briefcase, GraduationCap, FileText, Users, Download, RefreshCw, Loader2, CheckCircle, XCircle, Lightbulb, Trash2, Database, ChevronDown, ChevronUp } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,11 +43,16 @@ export default function ContactDetail() {
   const [selectedProvider, setSelectedProvider] = useState<'scrapingdog' | 'brightdata'>('scrapingdog');
   const [previewData, setPreviewData] = useState<any>(null);
   const [importCompany, setImportCompany] = useState(false);
+  const [showSemanticData, setShowSemanticData] = useState(false);
 
   const utils = trpc.useUtils();
   const { data: contact, isLoading, refetch } = trpc.contacts.get.useQuery({ id: contactId });
   const { data: relationships, refetch: refetchRelationships } = trpc.relationships.getForContact.useQuery({ contactId });
   const { data: availableProviders } = trpc.contacts.getAvailableProviders.useQuery();
+  const { data: semanticData } = trpc.semanticGraph.getContactTriples.useQuery(
+    { contactId },
+    { enabled: showSemanticData && contactId > 0 }
+  );
 
   const getImportPreviewMutation = trpc.contacts.getImportPreview.useMutation();
   const confirmImportMutation = trpc.contacts.confirmImport.useMutation();
@@ -710,6 +715,80 @@ export default function ContactDetail() {
                 Delete contact
               </Button>
             </CardContent>
+          </Card>
+
+          {/* Semantic Data */}
+          <Card>
+            <CardHeader className="pb-3">
+              <button
+                onClick={() => setShowSemanticData(!showSemanticData)}
+                className="flex items-center justify-between w-full text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <Database className="h-4 w-4" />
+                  <CardTitle className="text-base">Semantic Data</CardTitle>
+                  {semanticData && (
+                    <Badge variant="secondary" className="text-xs">
+                      {semanticData.tripleCount} triples
+                    </Badge>
+                  )}
+                </div>
+                {showSemanticData ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+              </button>
+            </CardHeader>
+            {showSemanticData && (
+              <CardContent className="pt-0">
+                {semanticData && semanticData.tripleCount > 0 ? (
+                  <div className="space-y-3">
+                    {/* Group triples by predicate type */}
+                    {Object.entries(semanticData.grouped || {}).slice(0, 8).map(([predicate, triples]) => (
+                      <div key={predicate} className="space-y-1">
+                        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          {predicate}
+                        </div>
+                        <div className="space-y-0.5">
+                          {(triples as any[]).slice(0, 3).map((triple: any, idx: number) => (
+                            <div key={idx} className="text-sm truncate" title={triple.object}>
+                              {triple.objectType === 'uri' ? (
+                                <span className="text-blue-600">{triple.object.split('/').pop() || triple.object}</span>
+                              ) : (
+                                triple.object
+                              )}
+                            </div>
+                          ))}
+                          {(triples as any[]).length > 3 && (
+                            <div className="text-xs text-muted-foreground">
+                              +{(triples as any[]).length - 3} more
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {Object.keys(semanticData.grouped || {}).length > 8 && (
+                      <div className="text-xs text-muted-foreground pt-2">
+                        +{Object.keys(semanticData.grouped || {}).length - 8} more properties
+                      </div>
+                    )}
+                    <Separator className="my-2" />
+                    <Button variant="outline" size="sm" className="w-full" asChild>
+                      <Link href={`/semantic-graph?contact=${contactId}`}>
+                        <Database className="mr-2 h-3 w-3" />
+                        View Full Graph
+                      </Link>
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground text-center py-4">
+                    No semantic data available.
+                    {!contact.linkedinUrl && " Import from LinkedIn to generate."}
+                  </div>
+                )}
+              </CardContent>
+            )}
           </Card>
         </div>
       </div>

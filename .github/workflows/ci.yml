@@ -35,7 +35,7 @@ jobs:
     - name: Run TypeScript type checking
       run: pnpm exec tsc --noEmit
 
-    - name: Sync database schema (add new columns)
+    - name: Sync database schema (add new columns and tables)
       run: |
         # Extract DB connection info from DATABASE_URL
         # Run ALTER TABLE statements - ignore errors if columns already exist
@@ -51,6 +51,8 @@ jobs:
               database: url.pathname.slice(1),
               ssl: { rejectUnauthorized: false }
             });
+
+            // Add columns to contacts table
             const columns = [
               'followers int', 'connections int', 'bannerImageUrl text',
               'firstName varchar(100)', 'lastName varchar(100)', 'bioLinks text',
@@ -73,6 +75,30 @@ jobs:
                 else throw e;
               }
             }
+
+            // Create rdfTriples table if not exists
+            try {
+              await conn.execute(\`
+                CREATE TABLE IF NOT EXISTS rdfTriples (
+                  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                  subject VARCHAR(512) NOT NULL,
+                  predicate VARCHAR(512) NOT NULL,
+                  object TEXT NOT NULL,
+                  objectType VARCHAR(20) NOT NULL,
+                  contactId INT NULL,
+                  createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  INDEX idx_rdf_subject (subject),
+                  INDEX idx_rdf_predicate (predicate),
+                  INDEX idx_rdf_contact (contactId),
+                  FOREIGN KEY (contactId) REFERENCES contacts(id) ON DELETE CASCADE
+                )
+              \`);
+              console.log('Created table: rdfTriples');
+            } catch (e) {
+              if (e.code === 'ER_TABLE_EXISTS_ERROR') console.log('Table exists: rdfTriples');
+              else throw e;
+            }
+
             await conn.end();
           }
           run().catch(e => { console.error(e); process.exit(1); });
