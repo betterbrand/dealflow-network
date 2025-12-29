@@ -109,3 +109,4 @@ temp/
 *.sqlite3
 .vercel
 .env*.local
+.aider*
