@@ -1,25 +1,85 @@
 import { eq, sql, and, desc, like, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { 
-  InsertUser, users, 
+import mysql from "mysql2";
+import {
+  InsertUser, users,
   contacts, companies, events, conversations, socialProfiles, contactRelationships, contactPhotos,
   InsertContact, InsertCompany, InsertEvent, InsertConversation, InsertSocialProfile, InsertContactPhoto, InsertContactRelationship
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
+let _pool: mysql.Pool | null = null;
 let _db: ReturnType<typeof drizzle> | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
+// Connection pool configuration
+const POOL_CONFIG = {
+  connectionLimit: parseInt(process.env.DB_POOL_SIZE || "10", 10),
+  waitForConnections: true,
+  queueLimit: 0,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 10000,
+  maxIdle: 10,
+  idleTimeout: 60000,
+  connectTimeout: 10000,
+};
+
+// Lazily create the connection pool and drizzle instance
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      // Create connection pool if it doesn't exist
+      if (!_pool) {
+        _pool = mysql.createPool({
+          uri: process.env.DATABASE_URL,
+          ...POOL_CONFIG,
+        });
+
+        console.log("[Database] Connection pool created successfully");
+      }
+
+      // Create drizzle instance with the pool
+      _db = drizzle(_pool);
     } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
+      console.warn("[Database] Failed to create connection pool:", error);
+      _pool = null;
       _db = null;
     }
   }
   return _db;
+}
+
+// Get pool metrics for monitoring
+export function getPoolMetrics() {
+  if (!_pool) {
+    return null;
+  }
+
+  // Note: mysql2 doesn't expose internal pool metrics in TypeScript
+  // For detailed monitoring, consider adding a monitoring library
+  return {
+    connectionLimit: POOL_CONFIG.connectionLimit,
+    isActive: _pool !== null,
+  };
+}
+
+// Graceful shutdown - close all pool connections
+export async function closePool() {
+  if (_pool) {
+    console.log("[Database] Closing connection pool...");
+    return new Promise<void>((resolve, reject) => {
+      _pool!.end((err) => {
+        if (err) {
+          console.error("[Database] Error closing pool:", err);
+          reject(err);
+        } else {
+          _pool = null;
+          _db = null;
+          console.log("[Database] Connection pool closed");
+          resolve();
+        }
+      });
+    });
+  }
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {

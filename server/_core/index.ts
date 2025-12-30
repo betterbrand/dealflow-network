@@ -87,6 +87,28 @@ async function startServer() {
       console.log("[Server] RDF store will lazy-load from database on first query");
     }
   });
+
+  // Graceful shutdown handling
+  const shutdown = async (signal: string) => {
+    console.log(`\n[Server] ${signal} received, shutting down gracefully...`);
+
+    server.close(() => {
+      console.log("[Server] HTTP server closed");
+    });
+
+    // Close database connection pool
+    try {
+      const { closePool } = await import("../db");
+      await closePool();
+    } catch (error) {
+      console.error("[Server] Error closing database pool:", error);
+    }
+
+    process.exit(0);
+  };
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
 startServer().catch(console.error);
