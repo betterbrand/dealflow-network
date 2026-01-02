@@ -15,7 +15,7 @@ import { trpc } from "@/lib/trpc";
 import { Filter, Maximize2, Minimize2, X, Search, Network, Users, Sparkles } from "lucide-react";
 import { AgentPanel } from "@/components/agent";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import CytoscapeComponent from "react-cytoscapejs";
 import cytoscape from "cytoscape";
 import fcose from "cytoscape-fcose";
@@ -48,6 +48,7 @@ const EDGE_TYPE_COLORS = {
 export default function Graph() {
   const { user, loading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
+  const searchParams = useSearch();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<string>("all");
@@ -55,6 +56,13 @@ export default function Graph() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [searchResults, setSearchResults] = useState<string[]>([]);
   const [graphMode, setGraphMode] = useState<GraphMode>("user-centric");
+
+  // Query highlight state from URL params
+  const [queryHighlight, setQueryHighlight] = useState<{
+    nodeIds: string[];
+    query: string;
+    mode: string;
+  } | null>(null);
 
   const cyRef = useRef<cytoscape.Core | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -77,6 +85,25 @@ export default function Graph() {
   const { data: companiesList } = trpc.companies.list.useQuery(undefined, {
     enabled: !!user,
   });
+
+  // Parse URL query parameters for query highlighting
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams);
+    const highlightParam = params.get('highlight');
+    const queryParam = params.get('query');
+    const modeParam = params.get('mode');
+
+    if (highlightParam) {
+      const nodeIds = highlightParam.split(',').filter(Boolean);
+      setQueryHighlight({
+        nodeIds,
+        query: queryParam || '',
+        mode: modeParam || 'filter',
+      });
+    } else {
+      setQueryHighlight(null);
+    }
+  }, [searchParams]);
 
   // Generate company colors for relationships mode
   const companyColors = useRef<Map<string, string>>(new Map());
@@ -560,6 +587,59 @@ export default function Graph() {
   useEffect(() => {
     applyFilters();
   }, [selectedCompany, selectedRelationType, applyFilters]);
+
+  // Apply query highlighting with staggered animation
+  useEffect(() => {
+    if (!cyRef.current || !queryHighlight) return;
+
+    const cy = cyRef.current;
+
+    // Dim all nodes first
+    cy.nodes().animate({
+      style: { opacity: 0.3 }
+    }, { duration: 300, easing: 'ease-out' });
+
+    // Highlight matched nodes with stagger animation
+    queryHighlight.nodeIds.forEach((nodeId, index) => {
+      const node = cy.getElementById(nodeId);
+
+      if (node.length > 0) {
+        setTimeout(() => {
+          node.animate({
+            style: {
+              opacity: 1,
+              'border-width': 4,
+              'border-color': '#F97316', // orange-500
+              'box-shadow': '0 0 30px rgba(249, 115, 22, 0.6)'
+            }
+          }, {
+            duration: 400,
+            easing: 'ease-out'
+          });
+        }, index * 50); // 50ms stagger
+      }
+    });
+
+    // Fit viewport to highlighted nodes
+    const highlightedCollection = cy.collection();
+    queryHighlight.nodeIds.forEach(id => {
+      const node = cy.getElementById(id);
+      if (node.length > 0) {
+        highlightedCollection.merge(node);
+      }
+    });
+
+    if (highlightedCollection.length > 0) {
+      setTimeout(() => {
+        cy.animate({
+          fit: { eles: highlightedCollection, padding: 100 }
+        }, {
+          duration: 600,
+          easing: 'ease-in-out'
+        });
+      }, queryHighlight.nodeIds.length * 50 + 400); // After all nodes are highlighted
+    }
+  }, [queryHighlight]);
 
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
