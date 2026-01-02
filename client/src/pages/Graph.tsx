@@ -1279,8 +1279,8 @@ export default function Graph() {
             style: {
               opacity: 1,
               'border-width': 4,
-              'border-color': '#F97316', // orange-500
-              'box-shadow': '0 0 30px rgba(249, 115, 22, 0.6)'
+              'border-color': '#1E6FD9', // sapphire blue-600
+              'box-shadow': '0 0 30px rgba(30, 111, 217, 0.7)'
             }
           }, {
             duration: 400,
