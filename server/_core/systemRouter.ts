@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { notifyOwner } from "./notification";
 import { adminProcedure, publicProcedure, router } from "./trpc";
+import { getPoolMetrics } from "../db";
 
 export const systemRouter = router({
   health: publicProcedure
@@ -9,9 +10,19 @@ export const systemRouter = router({
         timestamp: z.number().min(0, "timestamp cannot be negative"),
       })
     )
-    .query(() => ({
-      ok: true,
-    })),
+    .query(() => {
+      const poolMetrics = getPoolMetrics();
+      return {
+        ok: true,
+        database: poolMetrics ? {
+          status: "connected",
+          connectionLimit: poolMetrics.connectionLimit,
+        } : {
+          status: "not_initialized",
+        },
+        timestamp: Date.now(),
+      };
+    }),
 
   notifyOwner: adminProcedure
     .input(
