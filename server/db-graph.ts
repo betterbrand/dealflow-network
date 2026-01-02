@@ -69,7 +69,7 @@ export async function getUserContacts(
     .orderBy(
       // Prioritize contacts with LinkedIn data
       sql`CASE WHEN ${contacts.linkedinUrl} IS NOT NULL OR ${contacts.followers} IS NOT NULL THEN 0 ELSE 1 END`,
-      sql`${contacts.followers} DESC NULLS LAST`
+      sql`${contacts.followers} DESC`
     )
     .limit(limit);
 
