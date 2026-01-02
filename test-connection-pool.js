@@ -4,11 +4,15 @@
  * Connection Pool Load Test
  *
  * Tests database connection pool by simulating concurrent requests
- * Run with: node test-connection-pool.js
+ *
+ * Usage:
+ *   node test-connection-pool.js
+ *   PORT=3001 node test-connection-pool.js  # Use custom port
  */
 
 const CONCURRENT_REQUESTS = 20;
-const SERVER_URL = 'http://localhost:3001';
+const PORT = process.env.PORT || 3000;
+const SERVER_URL = `http://localhost:${PORT}`;
 
 async function testHealthEndpoint() {
   const response = await fetch(`${SERVER_URL}/api/trpc/system.health?batch=1&input=%7B%220%22%3A%7B%22timestamp%22%3A${Date.now()}%7D%7D`);
