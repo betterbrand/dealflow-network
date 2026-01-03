@@ -188,7 +188,165 @@ export const appRouter = router({
 
         return enriched;
       }),
-    
+
+    extractFromScreenshot: protectedProcedure
+      .input(z.object({
+        imageBase64: z.string(),
+        imageFormat: z.enum(['png', 'jpg', 'jpeg']),
+      }))
+      .mutation(async ({ input }) => {
+        const { extractTextFromImage } = await import('./_core/ocr');
+        const { extractContactsFromScreenshot } = await import('./morpheus');
+
+        console.log('[extractFromScreenshot] Starting OCR extraction...');
+
+        // Extract text from image using OCR
+        const ocrText = await extractTextFromImage(input.imageBase64);
+        console.log(`[extractFromScreenshot] OCR complete: ${ocrText.length} characters extracted`);
+
+        // Extract contacts from OCR text using AI
+        const contacts = await extractContactsFromScreenshot(ocrText);
+        console.log(`[extractFromScreenshot] Extracted ${contacts.length} contact(s)`);
+
+        return { ocrText, contacts };
+      }),
+
+    enrichMultipleUrls: protectedProcedure
+      .input(z.object({
+        urls: z.array(z.string().url()),
+        platform: z.enum(['linkedin', 'twitter']),
+      }))
+      .mutation(async ({ input }) => {
+        const { enrichLinkedInProfile, enrichTwitterProfile } = await import('./enrichment-adapter');
+
+        console.log(`[enrichMultipleUrls] Starting enrichment for ${input.urls.length} ${input.platform} URLs...`);
+
+        const results = [];
+        const errors = [];
+
+        // Process URLs with concurrency limit (3 at a time to avoid rate limits)
+        const concurrencyLimit = 3;
+        for (let i = 0; i < input.urls.length; i += concurrencyLimit) {
+          const batch = input.urls.slice(i, i + concurrencyLimit);
+
+          const batchPromises = batch.map(async (url) => {
+            try {
+              const enriched = input.platform === 'linkedin'
+                ? await enrichLinkedInProfile(url)
+                : await enrichTwitterProfile(url);
+
+              return { url, success: true, data: enriched };
+            } catch (error) {
+              console.error(`[enrichMultipleUrls] Failed to enrich ${url}:`, error);
+              return {
+                url,
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error',
+              };
+            }
+          });
+
+          const batchResults = await Promise.all(batchPromises);
+          results.push(...batchResults.filter(r => r.success));
+          errors.push(...batchResults.filter(r => !r.success));
+        }
+
+        console.log(`[enrichMultipleUrls] Enrichment complete: ${results.length} successful, ${errors.length} failed`);
+
+        return { results, errors };
+      }),
+
+    parseCsv: protectedProcedure
+      .input(z.object({
+        csvText: z.string(),
+        customMapping: z.record(z.string()).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { parseCsvToContacts } = await import('./_core/csv-parser');
+
+        console.log('[parseCsv] Starting CSV parsing...');
+
+        const result = await parseCsvToContacts(input.csvText, input.customMapping);
+
+        console.log(`[parseCsv] Parsing complete: ${result.successfulRows}/${result.totalRows} rows successful`);
+
+        return result;
+      }),
+
+    createBulk: protectedProcedure
+      .input(z.object({
+        contacts: z.array(z.object({
+          name: z.string(),
+          company: z.string().optional(),
+          role: z.string().optional(),
+          email: z.string().optional(),
+          phone: z.string().optional(),
+          location: z.string().optional(),
+          telegramUsername: z.string().optional(),
+          linkedinUrl: z.string().optional(),
+          twitterUrl: z.string().optional(),
+          notes: z.string().optional(),
+          conversationSummary: z.string().optional(),
+          sentiment: z.string().optional(),
+          interestLevel: z.string().optional(),
+        })),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { createOrLinkContact } = await import('./db-collaborative');
+        const { getOrCreateCompanyForContact } = await import('./db-company-auto-create');
+
+        console.log(`[createBulk] Creating ${input.contacts.length} contacts...`);
+
+        const results = [];
+
+        for (const contactData of input.contacts) {
+          try {
+            // Auto-create company if company name exists
+            let companyId: number | undefined;
+            if (contactData.company) {
+              try {
+                companyId = await getOrCreateCompanyForContact({
+                  company: contactData.company,
+                });
+              } catch (error) {
+                console.error('[createBulk] Failed to auto-create company:', error);
+              }
+            }
+
+            const { contactId, isNew, matchedBy } = await createOrLinkContact(
+              ctx.user.id,
+              { ...contactData, companyId },
+              {
+                privateNotes: contactData.notes,
+                conversationSummary: contactData.conversationSummary,
+                sentiment: contactData.sentiment as any,
+                interestLevel: contactData.interestLevel as any,
+              }
+            );
+
+            results.push({
+              success: true,
+              contactId,
+              isNew,
+              matchedBy,
+              name: contactData.name,
+            });
+          } catch (error) {
+            console.error(`[createBulk] Failed to create contact ${contactData.name}:`, error);
+            results.push({
+              success: false,
+              name: contactData.name,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            });
+          }
+        }
+
+        const successful = results.filter(r => r.success).length;
+        console.log(`[createBulk] Bulk creation complete: ${successful}/${input.contacts.length} successful`);
+
+        return { results, total: input.contacts.length, successful };
+      }),
+
     create: protectedProcedure
       .input(z.object({
         name: z.string(),
