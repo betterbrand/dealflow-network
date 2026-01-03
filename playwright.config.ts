@@ -59,7 +59,7 @@ export default defineConfig({
   webServer: {
     command: "docker compose up",
     url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: true, // Always reuse to prevent server restarts during tests
     timeout: 120 * 1000,
   },
 });
