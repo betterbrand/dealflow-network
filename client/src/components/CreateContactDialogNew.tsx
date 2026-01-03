@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
+  DialogDescription,
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
@@ -84,6 +86,54 @@ export function CreateContactDialog() {
     }
   };
 
+  const getDialogMetadata = () => {
+    switch (step) {
+      case "method-selection":
+        return {
+          title: "Add Contact",
+          description: "Choose how you'd like to import contacts to your network",
+        };
+      case "input":
+        switch (selectedMethod) {
+          case "screenshot":
+            return {
+              title: "Screenshot Upload",
+              description: "Upload a screenshot to extract contact information",
+            };
+          case "multiple-urls":
+            return {
+              title: "Multiple URLs",
+              description: "Paste a list of social profile URLs to import",
+            };
+          case "file-upload":
+            return {
+              title: "File Upload",
+              description: "Upload a text file containing social profile URLs",
+            };
+          case "csv":
+            return {
+              title: "CSV Import",
+              description: "Upload a CSV file with contact details",
+            };
+          default:
+            return {
+              title: "Import Contacts",
+              description: "Add contacts to your network",
+            };
+        }
+      case "review":
+        return {
+          title: "Review Contacts",
+          description: `Review and confirm ${extractedContacts.length} contact(s) before importing`,
+        };
+      default:
+        return {
+          title: "Add Contact",
+          description: "Import contacts to your network",
+        };
+    }
+  };
+
   const renderStep = () => {
     switch (step) {
       case "method-selection":
@@ -143,6 +193,8 @@ export function CreateContactDialog() {
     }
   };
 
+  const metadata = getDialogMetadata();
+
   return (
     <Dialog
       open={open}
@@ -158,6 +210,10 @@ export function CreateContactDialog() {
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+        <DialogTitle className="sr-only">{metadata.title}</DialogTitle>
+        <DialogDescription className="sr-only">
+          {metadata.description}
+        </DialogDescription>
         {renderStep()}
       </DialogContent>
     </Dialog>
