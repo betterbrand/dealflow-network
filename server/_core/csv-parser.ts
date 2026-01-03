@@ -145,7 +145,7 @@ export async function parseCsvToContacts(
             } catch (error) {
               if (error instanceof z.ZodError) {
                 // Record validation errors
-                error.errors.forEach((err) => {
+                error.issues.forEach((err) => {
                   errors.push({
                     row: rowNumber,
                     field: err.path.join('.'),
@@ -184,7 +184,7 @@ export async function parseCsvToContacts(
           );
         }
       },
-      error: (error) => {
+      error: (error: any) => {
         console.error('[CSV Parser] Papaparse error:', error);
         reject(new Error(`CSV parsing failed: ${error.message}`));
       },

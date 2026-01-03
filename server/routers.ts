@@ -16,6 +16,43 @@ export const appRouter = router({
         success: true,
       } as const;
     }),
+
+    // Get full user profile
+    getProfile: protectedProcedure.query(async ({ ctx }) => {
+      const { getUserProfile } = await import("./db");
+      return await getUserProfile(ctx.user.id);
+    }),
+
+    // Update user profile
+    updateProfile: protectedProcedure
+      .input(z.object({
+        name: z.string().optional(),
+        phone: z.string().optional(),
+        telegramUsername: z.string().optional(),
+        company: z.string().optional(),
+        jobTitle: z.string().optional(),
+        location: z.string().optional(),
+        linkedinUrl: z.string().optional(),
+        twitterUrl: z.string().optional(),
+        bio: z.string().optional(),
+        profilePictureUrl: z.string().optional(),
+        bannerImageUrl: z.string().optional(),
+        firstName: z.string().optional(),
+        lastName: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { updateUserProfile } = await import("./db");
+        return await updateUserProfile(ctx.user.id, input);
+      }),
+
+    // Import profile from LinkedIn URL
+    importLinkedInProfile: protectedProcedure
+      .input(z.object({ linkedinUrl: z.string().url() }))
+      .mutation(async ({ input, ctx }) => {
+        const { importUserLinkedInProfile } = await import("./db");
+        return await importUserLinkedInProfile(ctx.user.id, input.linkedinUrl);
+      }),
+
     // TEMPORARY: Email-gate login (no verification)
     // This bypasses magic link authentication as a workaround for publishing issues
     // Will be removed once proper magic link publishing is fixed
@@ -24,7 +61,7 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         const { upsertUser } = await import("./db");
         const { generateSessionToken } = await import("./_core/magic-link");
-        
+
         // Create/update user with just email (no OAuth)
         await upsertUser({
           openId: `email-gate-${input.email}`, // Temporary openId format
@@ -33,12 +70,12 @@ export const appRouter = router({
           loginMethod: "email-gate",
           lastSignedIn: new Date(),
         });
-        
+
         // Create session token
         const token = generateSessionToken(input.email);
         const cookieOptions = getSessionCookieOptions(ctx.req);
         ctx.res.cookie(COOKIE_NAME, token, cookieOptions);
-        
+
         return { success: true };
       }),
   }),
@@ -259,7 +296,7 @@ export const appRouter = router({
     parseCsv: protectedProcedure
       .input(z.object({
         csvText: z.string(),
-        customMapping: z.record(z.string()).optional(),
+        customMapping: z.record(z.string(), z.string()).optional(),
       }))
       .mutation(async ({ input }) => {
         const { parseCsvToContacts } = await import('./_core/csv-parser');
@@ -302,7 +339,7 @@ export const appRouter = router({
         for (const contactData of input.contacts) {
           try {
             // Auto-create company if company name exists
-            let companyId: number | undefined;
+            let companyId: number | null | undefined;
             if (contactData.company) {
               try {
                 companyId = await getOrCreateCompanyForContact({
@@ -532,10 +569,100 @@ export const appRouter = router({
             });
           }
         }
-        
+
         return { success: true };
       }),
-    
+
+    // Stub endpoints for import provider system (exists on main, not on this branch)
+    getAvailableProviders: protectedProcedure.query(async (): Promise<Array<{
+      id: string;
+      name: string;
+      speed: 'fast' | 'slow';
+    }>> => {
+      // Return empty list - this feature exists on main
+      return [];
+    }),
+
+    getImportPreview: protectedProcedure
+      .input(z.object({
+        provider: z.string(),
+        credentialId: z.number().optional(),
+        linkedinUrl: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        // Stub - return empty preview
+        return {
+          contacts: [],
+          provider: input.provider,
+        };
+      }),
+
+    confirmImport: protectedProcedure
+      .input(z.object({
+        provider: z.string(),
+        contacts: z.array(z.any()).optional(),
+        contactId: z.number().optional(),
+        importData: z.any().optional(),
+        importCompany: z.boolean().optional(),
+        linkedinUrl: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        // Stub - return success with no imports
+        return {
+          success: true,
+          importedCount: 0,
+        };
+      }),
+
+    getUserCentricGraph: protectedProcedure
+      .input(
+        z.object({
+          maxDepth: z.number().min(1).max(4).default(3),
+          maxNodesPerDegree: z.number().min(5).max(50).default(20),
+        }).optional()
+      )
+      .query(async ({ ctx, input }): Promise<{
+        nodes: Array<{
+          id: number;
+          name: string;
+          company?: string;
+          role?: string;
+          degree: number;
+          isUser?: boolean;
+          followers?: number;
+          connections?: number;
+          profilePictureUrl?: string;
+        }>;
+        edges: Array<{
+          from: number;
+          to: number;
+          source: number;
+          target: number;
+          relationshipType?: string;
+          edgeType?: string;
+          strength?: number;
+        }>;
+        stats: {
+          totalNodes: number;
+          totalEdges: number;
+          maxDepth: number;
+          edgesByType: Record<string, number>;
+        };
+      }> => {
+        // Stub - db-graph module exists on main but not on this branch
+        // Return empty graph for now
+        return {
+          nodes: [],
+          edges: [],
+          stats: {
+            totalNodes: 0,
+            totalEdges: 0,
+            maxDepth: input?.maxDepth || 3,
+            edgesByType: {},
+          },
+        };
+      }),
+
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
@@ -734,6 +861,19 @@ export const appRouter = router({
       return result;
     }),
 
+    // Get triples for a specific contact (from DB)
+    getContactTriples: protectedProcedure
+      .input(z.object({ contactId: z.number() }))
+      .query(async ({ input }) => {
+        // This is a stub - the triple-store module exists on main but not on this branch
+        // Return empty result for now
+        return {
+          tripleCount: 0,
+          triples: [],
+          grouped: {},
+        };
+      }),
+
     // Predefined query: Find all people
     getAllPeople: protectedProcedure.query(async () => {
       const { QueryTemplates, executeSparqlQuery } = await import("./_core/sparql");
@@ -876,6 +1016,13 @@ export const appRouter = router({
       const { getContactsForGraph } = await import("./db");
       return await getContactsForGraph();
     }),
+
+    computeInferredEdges: protectedProcedure
+      .input(z.object({ contactId: z.number() }))
+      .mutation(async ({ input }) => {
+        // Stub - inferred-edges service exists on main but not on this branch
+        return { success: true, edgesCreated: 0 };
+      }),
   }),
   
   relationships: router({
@@ -1080,6 +1227,69 @@ export const appRouter = router({
           return { success: false, message: "Cannot remove yourself" };
         }
         return removeAuthorizedUser(input.email);
+      }),
+  }),
+
+  agent: router({
+    chat: protectedProcedure
+      .input(z.object({
+        sessionId: z.number().optional(),
+        message: z.string().min(1).max(2000),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // Stub - agent services exist on main but not on this branch
+        // Return a proper AgentResponse for now
+        return {
+          content: "Agent feature is not yet available on this branch. It will be available after merging with main.",
+          tone: "neutral" as const,
+          suggestedDelayMs: 800,
+          showTypingIndicator: false,
+          confidence: 100,
+          canRetry: false,
+          sessionId: input.sessionId || 0,
+          reasoningSummary: undefined,
+          suggestedFollowups: undefined,
+        };
+      }),
+
+    getSessions: protectedProcedure
+      .input(z.object({ limit: z.number().min(1).max(50).default(10) }).optional())
+      .query(async ({ ctx, input }) => {
+        // Stub - return empty sessions
+        return [];
+      }),
+
+    getSession: protectedProcedure
+      .input(z.object({ sessionId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        // Stub - return null
+        return null;
+      }),
+
+    getConversation: protectedProcedure
+      .input(z.object({
+        sessionId: z.number(),
+        limit: z.number().min(1).max(100).default(50),
+      }))
+      .query(async ({ input, ctx }) => {
+        // Stub - return empty conversation
+        return [];
+      }),
+
+    startSession: protectedProcedure
+      .input(z.object({
+        sessionType: z.enum(["background_scan", "conversational"]),
+        goal: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // Stub - return placeholder session
+        return {
+          id: 0,
+          userId: ctx.user.id,
+          sessionType: input.sessionType,
+          status: "paused",
+          createdAt: new Date(),
+        };
       }),
   }),
 });

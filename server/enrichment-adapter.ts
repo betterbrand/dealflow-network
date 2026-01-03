@@ -23,8 +23,14 @@ import { loadSemanticGraph } from "./_core/sparql";
 
 export interface EnrichedProfile {
   name: string;
+  firstName?: string;
+  lastName?: string;
+  linkedinId?: string;
+  linkedinNumId?: string;
   headline?: string;
   location?: string;
+  city?: string;
+  countryCode?: string;
   summary?: string;
   experience?: Array<{
     title: string;
@@ -40,9 +46,42 @@ export interface EnrichedProfile {
     startDate?: string;
     endDate?: string;
   }>;
+  educationDetails?: string;
   skills?: string[];
+  honorsAndAwards?: {
+    title?: string;
+    items?: Array<{ name: string; issuer?: string; date?: string }>;
+  };
   connections?: number;
+  followers?: number;
   profilePictureUrl?: string;
+  bannerImage?: string;
+  bioLinks?: Array<{
+    title: string;
+    link: string;
+  }>;
+  posts?: Array<{
+    id: string;
+    title: string;
+    attribution?: string;
+    link: string;
+    createdAt: string;
+    interaction?: string;
+  }>;
+  activity?: Array<{
+    id: string;
+    interaction: string;
+    link: string;
+    title: string;
+    img?: string;
+  }>;
+  peopleAlsoViewed?: Array<{
+    name: string;
+    profileLink: string;
+    about?: string;
+    location?: string;
+  }>;
+  memorializedAccount?: boolean;
   // RDF/JSON-LD semantic graph
   semanticGraph?: SemanticGraph;
 }
@@ -105,14 +144,29 @@ export async function enrichLinkedInProfile(
 
     return {
       name: profile.name || "",
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      linkedinId: profile.linkedinId,
+      linkedinNumId: profile.linkedinNumId,
       headline: profile.headline,
       location: profile.location,
+      city: profile.city,
+      countryCode: profile.countryCode,
       summary: profile.summary,
       experience: profile.experience,
       education: profile.education,
+      educationDetails: profile.educationDetails,
       skills: profile.skills,
+      honorsAndAwards: profile.honorsAndAwards,
       connections: profile.connections,
+      followers: profile.followers,
       profilePictureUrl: profile.profilePictureUrl,
+      bannerImage: profile.bannerImage,
+      bioLinks: profile.bioLinks,
+      posts: profile.posts,
+      activity: profile.activity,
+      peopleAlsoViewed: profile.peopleAlsoViewed,
+      memorializedAccount: profile.memorializedAccount,
       semanticGraph,
     };
   } catch (error) {
