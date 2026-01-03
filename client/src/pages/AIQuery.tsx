@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Loader2, Send, Sparkles, User, Building2, MapPin, Briefcase, History, X, Clock, Lightbulb, Network } from "lucide-react";
+import { Loader2, Send, Sparkles, User, Building2, MapPin, Briefcase, History, X, Clock, Lightbulb } from "lucide-react";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
@@ -312,29 +312,9 @@ export default function AIQuery() {
             {/* Results List */}
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">
-                    Results ({results.count} {results.count === 1 ? "contact" : "contacts"})
-                  </CardTitle>
-                  {results.count > 0 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const nodeIds = results.results.map((c: any) => c.id).join(',');
-                        const params = new URLSearchParams({
-                          highlight: nodeIds,
-                          query: query,
-                          mode: results.parsed.intent || 'filter',
-                        });
-                        setLocation(`/graph?${params.toString()}`);
-                      }}
-                    >
-                      <Network className="h-4 w-4 mr-2" />
-                      View in Network Graph
-                    </Button>
-                  )}
-                </div>
+                <CardTitle className="text-lg">
+                  Results ({results.count} {results.count === 1 ? "contact" : "contacts"})
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 {results.count === 0 ? (

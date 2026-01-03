@@ -12,58 +12,21 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Plus, Loader2, CheckCircle2, ArrowRight, Download, User, Building2, Briefcase, Target } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Plus, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 
-type DialogStep =
-  | "quick-create"      // Step 1: Name, Company, Role, Opportunity
-  | "post-create"       // Step 2: What next? Add details / Import / Done
-  | "add-details"       // Step 3: Email, Phone, Location, etc.
-  | "import-provider"   // Step 4a: Choose provider
-  | "import-loading"    // Step 4b: Fetching preview
-  | "import-preview"    // Step 4c: Show preview card
-  | "import-confirm";   // Step 5: Success summary
-
-type LinkedInProvider = "brightdata" | "scrapingdog";
-
-interface ImportPreview {
-  name: string;
-  firstName?: string;
-  lastName?: string;
-  headline?: string;
-  profilePictureUrl?: string;
-  currentCompany?: string;
-  currentRole?: string;
-  location?: string;
-  followers?: number;
-  connections?: number;
-  provider: LinkedInProvider;
-  _rawData: any;
-}
+type ImportStep = "import" | "review";
 
 export function CreateContactDialog() {
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState<DialogStep>("quick-create");
-  const [createdContactId, setCreatedContactId] = useState<number | null>(null);
-  const [previewData, setPreviewData] = useState<ImportPreview | null>(null);
-  const [selectedProvider, setSelectedProvider] = useState<LinkedInProvider>("scrapingdog");
-  const [importCompany, setImportCompany] = useState(true);
-  const [linkedinUrl, setLinkedinUrl] = useState("");
-
-  // Quick create form data
-  const [quickFormData, setQuickFormData] = useState({
+  const [step, setStep] = useState<ImportStep>("import");
+  const [profileUrl, setProfileUrl] = useState("");
+  const [isEnriching, setIsEnriching] = useState(false);
+  const [formData, setFormData] = useState({
     name: "",
     company: "",
     role: "",
-    opportunity: "",
-  });
-
-  // Extended form data (for add-details step)
-  const [detailsFormData, setDetailsFormData] = useState({
     email: "",
     phone: "",
     location: "",
@@ -74,67 +37,27 @@ export function CreateContactDialog() {
   });
 
   const utils = trpc.useUtils();
-
-  // Get available providers
-  const { data: providers } = trpc.contacts.getAvailableProviders.useQuery();
-
-  // Mutations
+  const enrichMutation = trpc.contacts.enrichFromLinkedIn.useMutation();
   const createMutation = trpc.contacts.create.useMutation({
-    onSuccess: (result) => {
-      setCreatedContactId(result.id);
+    onSuccess: () => {
+      toast.success("Contact created successfully!");
       utils.contacts.list.invalidate();
       utils.graph.getData.invalidate();
-      toast.success("Contact created!");
-      setStep("post-create");
+      resetDialog();
     },
     onError: (error) => {
       toast.error(`Failed to create contact: ${error.message}`);
     },
   });
 
-  const updateMutation = trpc.contacts.update.useMutation({
-    onSuccess: () => {
-      utils.contacts.list.invalidate();
-      toast.success("Contact updated!");
-    },
-    onError: (error) => {
-      toast.error(`Failed to update contact: ${error.message}`);
-    },
-  });
-
-  const previewMutation = trpc.contacts.getImportPreview.useMutation({
-    onSuccess: (data) => {
-      setPreviewData(data as ImportPreview);
-      setStep("import-preview");
-    },
-    onError: (error) => {
-      toast.error(`Failed to fetch preview: ${error.message}`);
-      setStep("import-provider");
-    },
-  });
-
-  const confirmImportMutation = trpc.contacts.confirmImport.useMutation({
-    onSuccess: (result) => {
-      utils.contacts.list.invalidate();
-      utils.contacts.get.invalidate({ id: createdContactId! });
-      toast.success(
-        `Imported ${result.experienceCount} experiences, ${result.educationCount} education, ${result.skillsCount} skills`
-      );
-      setStep("import-confirm");
-    },
-    onError: (error) => {
-      toast.error(`Failed to import: ${error.message}`);
-    },
-  });
-
   const resetDialog = () => {
     setOpen(false);
-    setStep("quick-create");
-    setCreatedContactId(null);
-    setPreviewData(null);
-    setLinkedinUrl("");
-    setQuickFormData({ name: "", company: "", role: "", opportunity: "" });
-    setDetailsFormData({
+    setStep("import");
+    setProfileUrl("");
+    setFormData({
+      name: "",
+      company: "",
+      role: "",
       email: "",
       phone: "",
       location: "",
@@ -145,83 +68,98 @@ export function CreateContactDialog() {
     });
   };
 
-  const handleQuickCreate = (e: React.FormEvent) => {
+  const handleImport = async () => {
+    if (!profileUrl.trim()) {
+      toast.error("Please enter a LinkedIn or X/Twitter profile URL");
+      return;
+    }
+
+    // Validate URL format
+    const isLinkedIn = profileUrl.includes("linkedin.com");
+    const isTwitter = profileUrl.includes("twitter.com") || profileUrl.includes("x.com");
+
+    if (!isLinkedIn && !isTwitter) {
+      toast.error("Please enter a valid LinkedIn or X/Twitter URL");
+      return;
+    }
+
+    setIsEnriching(true);
+
+    try {
+      if (isLinkedIn) {
+        // Use existing LinkedIn enrichment
+        const enriched = await enrichMutation.mutateAsync({ linkedinUrl: profileUrl });
+
+        // Check if enrichment was cancelled (mutation was reset)
+        if (!enrichMutation.isSuccess) {
+          return;
+        }
+
+        // Extract company and role from most recent experience
+        const latestExperience = enriched.experience?.[0];
+
+        setFormData({
+          name: enriched.name || "",
+          company: latestExperience?.company || "",
+          role: latestExperience?.title || enriched.headline || "",
+          email: "",
+          phone: "",
+          location: enriched.location || "",
+          telegramUsername: "",
+          linkedinUrl: profileUrl,
+          twitterUrl: "",
+          notes: enriched.summary || "",
+        });
+
+        toast.success("Profile imported successfully!");
+        setStep("review");
+      } else {
+        // Twitter/X enrichment - for now, just set the URL and let user fill in
+        // TODO: Implement X/Twitter enrichment service
+        setFormData({
+          ...formData,
+          twitterUrl: profileUrl,
+        });
+        toast.info("X/Twitter enrichment coming soon. Please fill in the details manually.");
+        setStep("review");
+      }
+    } catch (error: any) {
+      // Don't show error if it was cancelled
+      if (error.message !== 'CANCELLED') {
+        toast.error(`Failed to import profile: ${error.message}`);
+      }
+    } finally {
+      setIsEnriching(false);
+    }
+  };
+
+  const handleCancelEnrichment = () => {
+    // Reset the mutation to cancel the ongoing request
+    enrichMutation.reset();
+    setIsEnriching(false);
+    toast.info("Import cancelled");
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!quickFormData.name.trim()) {
+    
+    if (!formData.name.trim()) {
       toast.error("Name is required");
       return;
     }
+
     createMutation.mutate({
-      name: quickFormData.name,
-      company: quickFormData.company || undefined,
-      role: quickFormData.role || undefined,
-      opportunity: quickFormData.opportunity || undefined,
+      name: formData.name,
+      company: formData.company || undefined,
+      role: formData.role || undefined,
+      email: formData.email || undefined,
+      phone: formData.phone || undefined,
+      location: formData.location || undefined,
+      telegramUsername: formData.telegramUsername || undefined,
+      linkedinUrl: formData.linkedinUrl || undefined,
+      twitterUrl: formData.twitterUrl || undefined,
+      notes: formData.notes || undefined,
     });
-  };
-
-  const handleAddDetails = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!createdContactId) return;
-
-    updateMutation.mutate({
-      id: createdContactId,
-      email: detailsFormData.email || undefined,
-      phone: detailsFormData.phone || undefined,
-      location: detailsFormData.location || undefined,
-      telegramUsername: detailsFormData.telegramUsername || undefined,
-      linkedinUrl: detailsFormData.linkedinUrl || undefined,
-      twitterUrl: detailsFormData.twitterUrl || undefined,
-      notes: detailsFormData.notes || undefined,
-    });
-
-    // If LinkedIn URL was added, offer to import
-    if (detailsFormData.linkedinUrl) {
-      setLinkedinUrl(detailsFormData.linkedinUrl);
-      toast.success("Details saved! You can now import from LinkedIn.");
-    } else {
-      resetDialog();
-    }
-  };
-
-  const handleStartImport = () => {
-    if (!linkedinUrl.trim()) {
-      setStep("import-provider");
-      return;
-    }
-    // Already have URL, go to provider selection
-    setStep("import-provider");
-  };
-
-  const handleFetchPreview = () => {
-    if (!linkedinUrl.trim()) {
-      toast.error("Please enter a LinkedIn URL");
-      return;
-    }
-    setStep("import-loading");
-    previewMutation.mutate({
-      linkedinUrl,
-      provider: selectedProvider,
-    });
-  };
-
-  const handleConfirmImport = () => {
-    if (!createdContactId || !previewData) return;
-    confirmImportMutation.mutate({
-      contactId: createdContactId,
-      importData: previewData._rawData,
-      importCompany,
-      provider: previewData.provider,
-      linkedinUrl: linkedinUrl.trim(),
-    });
-  };
-
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
   };
 
   return (
@@ -235,183 +173,181 @@ export function CreateContactDialog() {
           Add Contact
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
-        {/* Step 1: Quick Create */}
-        {step === "quick-create" && (
-          <form onSubmit={handleQuickCreate}>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+        {step === "import" ? (
+          <>
             <DialogHeader>
-              <DialogTitle>Quick Add Contact</DialogTitle>
+              <DialogTitle>Import Contact</DialogTitle>
               <DialogDescription>
-                Capture the essentials now. Add more details later.
+                Start by importing a LinkedIn or X/Twitter profile. We'll automatically fill in the details.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-6">
+              <div className="space-y-4">
+                <div className="grid gap-3">
+                  <Label htmlFor="profileUrl" className="text-base">
+                    Profile URL <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="profileUrl"
+                    value={profileUrl}
+                    onChange={(e) => setProfileUrl(e.target.value)}
+                    placeholder="https://linkedin.com/in/username or https://x.com/username"
+                    className="text-base"
+                    disabled={isEnriching}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleImport();
+                      }
+                    }}
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Paste a LinkedIn or X/Twitter profile URL to automatically import contact details
+                  </p>
+                </div>
+
+                {isEnriching && (
+                  <div className="space-y-3 p-5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                      <div className="flex-1">
+                        <p className="font-semibold text-blue-900 text-lg">Importing LinkedIn profile...</p>
+                        <p className="text-sm text-blue-700 mt-1">
+                          Fetching professional data • Typically takes 30-60 seconds
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Progress bar animation */}
+                    <div className="relative h-2 bg-blue-100 rounded-full overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-50 animate-pulse" />
+                      <div className="h-full w-3/5 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full animate-pulse" />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-blue-600">
+                        Please wait while we retrieve work history, education, and profile details...
+                      </p>
+                      <p className="text-xs text-blue-500 font-medium">
+                        Click "Cancel Import" below to stop
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-3 pt-4">
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium">LinkedIn Import</p>
+                      <p className="text-sm text-muted-foreground">
+                        Automatically imports name, company, role, location, and bio
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium">X/Twitter Import</p>
+                      <p className="text-sm text-muted-foreground">
+                        Coming soon - manual entry required for now
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              {isEnriching ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={handleCancelEnrichment}
+                  >
+                    Cancel Import
+                  </Button>
+                  <Button disabled>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Importing...
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button type="button" variant="outline" onClick={resetDialog}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleImport}
+                    disabled={!profileUrl.trim()}
+                  >
+                    Import Profile
+                  </Button>
+                </>
+              )}
+            </DialogFooter>
+          </>
+        ) : (
+          <form onSubmit={handleSubmit}>
+            <DialogHeader>
+              <DialogTitle>Review & Edit Contact</DialogTitle>
+              <DialogDescription>
+                Review the imported information and make any necessary edits.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="name" className="flex items-center gap-2">
-                  <User className="h-4 w-4" />
+                <Label htmlFor="name">
                   Name <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id="name"
-                  value={quickFormData.name}
-                  onChange={(e) => setQuickFormData({ ...quickFormData, name: e.target.value })}
-                  placeholder="Jane Smith"
-                  autoFocus
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="John Doe"
+                  required
                 />
               </div>
-
+              
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="company" className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4" />
-                    Company
-                  </Label>
+                  <Label htmlFor="company">Company</Label>
                   <Input
                     id="company"
-                    value={quickFormData.company}
-                    onChange={(e) => setQuickFormData({ ...quickFormData, company: e.target.value })}
+                    value={formData.company}
+                    onChange={(e) => setFormData({ ...formData, company: e.target.value })}
                     placeholder="Acme Corp"
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="role" className="flex items-center gap-2">
-                    <Briefcase className="h-4 w-4" />
-                    Role
-                  </Label>
+                  <Label htmlFor="role">Role</Label>
                   <Input
                     id="role"
-                    value={quickFormData.role}
-                    onChange={(e) => setQuickFormData({ ...quickFormData, role: e.target.value })}
-                    placeholder="VP Sales"
+                    value={formData.role}
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                    placeholder="CEO"
                   />
                 </div>
               </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="opportunity" className="flex items-center gap-2">
-                  <Target className="h-4 w-4" />
-                  Opportunity
-                </Label>
-                <Textarea
-                  id="opportunity"
-                  value={quickFormData.opportunity}
-                  onChange={(e) => setQuickFormData({ ...quickFormData, opportunity: e.target.value })}
-                  placeholder="Why does this contact matter? e.g., 'Potential partnership for API product'"
-                  rows={2}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Capture the deal or opportunity while it's fresh in your mind
-                </p>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={resetDialog}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={createMutation.isPending}>
-                {createMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  "Create Contact"
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        )}
-
-        {/* Step 2: Post-Create Options */}
-        {step === "post-create" && (
-          <>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
-                Contact Created!
-              </DialogTitle>
-              <DialogDescription>
-                What would you like to do next?
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-3 py-6">
-              <Button
-                variant="outline"
-                className="justify-start h-auto py-4"
-                onClick={() => setStep("add-details")}
-              >
-                <div className="flex items-center gap-3">
-                  <Plus className="h-5 w-5" />
-                  <div className="text-left">
-                    <p className="font-medium">Add More Details</p>
-                    <p className="text-sm text-muted-foreground">
-                      Email, phone, LinkedIn, notes, etc.
-                    </p>
-                  </div>
-                </div>
-              </Button>
-
-              <Button
-                variant="outline"
-                className="justify-start h-auto py-4"
-                onClick={handleStartImport}
-              >
-                <div className="flex items-center gap-3">
-                  <Download className="h-5 w-5" />
-                  <div className="text-left">
-                    <p className="font-medium">Import from LinkedIn</p>
-                    <p className="text-sm text-muted-foreground">
-                      Auto-fill experience, education, skills
-                    </p>
-                  </div>
-                </div>
-              </Button>
-
-              <Button
-                className="justify-start h-auto py-4"
-                onClick={resetDialog}
-              >
-                <div className="flex items-center gap-3">
-                  <ArrowRight className="h-5 w-5" />
-                  <div className="text-left">
-                    <p className="font-medium">Done</p>
-                    <p className="text-sm text-muted-foreground">
-                      I'll add more details later
-                    </p>
-                  </div>
-                </div>
-              </Button>
-            </div>
-          </>
-        )}
-
-        {/* Step 3: Add Details */}
-        {step === "add-details" && (
-          <form onSubmit={handleAddDetails}>
-            <DialogHeader>
-              <DialogTitle>Add More Details</DialogTitle>
-              <DialogDescription>
-                Fill in additional contact information
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="email">Email</Label>
                   <Input
                     id="email"
                     type="email"
-                    value={detailsFormData.email}
-                    onChange={(e) => setDetailsFormData({ ...detailsFormData, email: e.target.value })}
-                    placeholder="jane@example.com"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="john@example.com"
                   />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="phone">Phone</Label>
                   <Input
                     id="phone"
-                    value={detailsFormData.phone}
-                    onChange={(e) => setDetailsFormData({ ...detailsFormData, phone: e.target.value })}
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     placeholder="+1 234 567 8900"
                   />
                 </div>
@@ -422,41 +358,41 @@ export function CreateContactDialog() {
                   <Label htmlFor="location">Location</Label>
                   <Input
                     id="location"
-                    value={detailsFormData.location}
-                    onChange={(e) => setDetailsFormData({ ...detailsFormData, location: e.target.value })}
+                    value={formData.location}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                     placeholder="San Francisco, CA"
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="telegram">Telegram</Label>
+                  <Label htmlFor="telegram">Telegram Username</Label>
                   <Input
                     id="telegram"
-                    value={detailsFormData.telegramUsername}
-                    onChange={(e) => setDetailsFormData({ ...detailsFormData, telegramUsername: e.target.value })}
-                    placeholder="@username"
+                    value={formData.telegramUsername}
+                    onChange={(e) => setFormData({ ...formData, telegramUsername: e.target.value })}
+                    placeholder="@johndoe"
                   />
                 </div>
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="linkedin">LinkedIn URL</Label>
+                <Label htmlFor="linkedin">LinkedIn Profile URL</Label>
                 <Input
                   id="linkedin"
                   type="url"
-                  value={detailsFormData.linkedinUrl}
-                  onChange={(e) => setDetailsFormData({ ...detailsFormData, linkedinUrl: e.target.value })}
-                  placeholder="https://linkedin.com/in/janesmith"
+                  value={formData.linkedinUrl}
+                  onChange={(e) => setFormData({ ...formData, linkedinUrl: e.target.value })}
+                  placeholder="https://linkedin.com/in/johndoe"
                 />
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="twitter">Twitter/X URL</Label>
+                <Label htmlFor="twitter">Twitter/X Profile URL</Label>
                 <Input
                   id="twitter"
                   type="url"
-                  value={detailsFormData.twitterUrl}
-                  onChange={(e) => setDetailsFormData({ ...detailsFormData, twitterUrl: e.target.value })}
-                  placeholder="https://x.com/janesmith"
+                  value={formData.twitterUrl}
+                  onChange={(e) => setFormData({ ...formData, twitterUrl: e.target.value })}
+                  placeholder="https://twitter.com/johndoe"
                 />
               </div>
 
@@ -464,189 +400,26 @@ export function CreateContactDialog() {
                 <Label htmlFor="notes">Notes</Label>
                 <Textarea
                   id="notes"
-                  value={detailsFormData.notes}
-                  onChange={(e) => setDetailsFormData({ ...detailsFormData, notes: e.target.value })}
-                  placeholder="Additional notes..."
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder="Additional notes about this contact..."
                   rows={3}
                 />
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setStep("post-create")}>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setStep("import")}
+              >
                 Back
               </Button>
-              <Button type="submit" disabled={updateMutation.isPending}>
-                {updateMutation.isPending ? "Saving..." : "Save Details"}
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? "Creating..." : "Create Contact"}
               </Button>
             </DialogFooter>
           </form>
-        )}
-
-        {/* Step 4a: Provider Selection */}
-        {step === "import-provider" && (
-          <>
-            <DialogHeader>
-              <DialogTitle>Import from LinkedIn</DialogTitle>
-              <DialogDescription>
-                Enter the LinkedIn profile URL and choose a data provider
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="linkedinUrl">LinkedIn Profile URL</Label>
-                <Input
-                  id="linkedinUrl"
-                  type="url"
-                  value={linkedinUrl}
-                  onChange={(e) => setLinkedinUrl(e.target.value)}
-                  placeholder="https://linkedin.com/in/janesmith"
-                  autoFocus
-                />
-              </div>
-
-              {providers && providers.length > 1 && (
-                <div className="grid gap-2">
-                  <Label>Data Provider</Label>
-                  <RadioGroup
-                    value={selectedProvider}
-                    onValueChange={(value) => setSelectedProvider(value as LinkedInProvider)}
-                  >
-                    {providers.map((provider) => (
-                      <div key={provider.id} className="flex items-center space-x-2 p-3 border rounded-lg">
-                        <RadioGroupItem value={provider.id} id={provider.id} />
-                        <Label htmlFor={provider.id} className="flex-1 cursor-pointer">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium">{provider.name}</span>
-                            <span className={`text-xs px-2 py-1 rounded ${
-                              provider.speed === 'fast'
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-amber-100 text-amber-700'
-                            }`}>
-                              {provider.speed === 'fast' ? '~5-10s' : '~30-60s'}
-                            </span>
-                          </div>
-                        </Label>
-                      </div>
-                    ))}
-                  </RadioGroup>
-                </div>
-              )}
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setStep("post-create")}>
-                Back
-              </Button>
-              <Button onClick={handleFetchPreview} disabled={!linkedinUrl.trim()}>
-                Fetch Profile
-              </Button>
-            </DialogFooter>
-          </>
-        )}
-
-        {/* Step 4b: Loading */}
-        {step === "import-loading" && (
-          <>
-            <DialogHeader>
-              <DialogTitle>Importing Profile...</DialogTitle>
-            </DialogHeader>
-            <div className="py-12 flex flex-col items-center gap-4">
-              <Loader2 className="h-12 w-12 animate-spin text-primary" />
-              <div className="text-center">
-                <p className="font-medium">Fetching LinkedIn profile</p>
-                <p className="text-sm text-muted-foreground">
-                  Using {selectedProvider === 'scrapingdog' ? 'Scrapingdog' : 'Bright Data'}
-                </p>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* Step 4c: Preview */}
-        {step === "import-preview" && previewData && (
-          <>
-            <DialogHeader>
-              <DialogTitle>Confirm Import</DialogTitle>
-              <DialogDescription>
-                Review the profile data before importing
-              </DialogDescription>
-            </DialogHeader>
-            <div className="py-4">
-              <div className="flex items-start gap-4 p-4 border rounded-lg bg-muted/30">
-                <Avatar className="h-16 w-16">
-                  <AvatarImage src={previewData.profilePictureUrl} />
-                  <AvatarFallback>{getInitials(previewData.name)}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-lg truncate">{previewData.name}</h3>
-                  <p className="text-sm text-muted-foreground truncate">
-                    {previewData.currentRole} at {previewData.currentCompany}
-                  </p>
-                  {previewData.location && (
-                    <p className="text-sm text-muted-foreground">{previewData.location}</p>
-                  )}
-                  <div className="flex gap-4 mt-2 text-sm">
-                    {previewData.followers !== undefined && (
-                      <span>{previewData.followers.toLocaleString()} followers</span>
-                    )}
-                    {previewData.connections !== undefined && (
-                      <span>{previewData.connections.toLocaleString()} connections</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-2 mt-4">
-                <Checkbox
-                  id="importCompany"
-                  checked={importCompany}
-                  onCheckedChange={(checked) => setImportCompany(checked === true)}
-                />
-                <Label htmlFor="importCompany" className="cursor-pointer">
-                  Also create company record for {previewData.currentCompany}
-                </Label>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setStep("import-provider")}>
-                Back
-              </Button>
-              <Button onClick={handleConfirmImport} disabled={confirmImportMutation.isPending}>
-                {confirmImportMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Importing...
-                  </>
-                ) : (
-                  "Import Data"
-                )}
-              </Button>
-            </DialogFooter>
-          </>
-        )}
-
-        {/* Step 5: Success */}
-        {step === "import-confirm" && (
-          <>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
-                Import Complete!
-              </DialogTitle>
-              <DialogDescription>
-                LinkedIn data has been added to the contact
-              </DialogDescription>
-            </DialogHeader>
-            <div className="py-6 text-center">
-              <p className="text-muted-foreground">
-                Experience, education, skills, and other data have been imported successfully.
-              </p>
-            </div>
-            <DialogFooter>
-              <Button onClick={resetDialog}>
-                Done
-              </Button>
-            </DialogFooter>
-          </>
         )}
       </DialogContent>
     </Dialog>

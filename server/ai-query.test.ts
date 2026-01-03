@@ -4,17 +4,16 @@ import { contacts } from "../drizzle/schema";
 import { parseQuery } from "./services/query.service";
 import { and, or, like } from "drizzle-orm";
 
-// Skip AI tests in CI or if no database - these are integration tests that call live LLM APIs
+// Skip AI tests in CI - these are integration tests that call live LLM APIs
 // Run locally with: npm test -- --run server/ai-query.test.ts
 const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
-const hasDb = !!process.env.DATABASE_URL;
 
-describe.skipIf(isCI || !hasDb)("AI Query Feature", () => {
+describe.skipIf(isCI)("AI Query Feature", () => {
   let testContactIds: number[] = [];
 
   beforeAll(async () => {
     const db = await getDb();
-    if (!db) return;
+    if (!db) throw new Error("Database not available");
 
     // Create test contacts with various attributes
     const testContacts = [

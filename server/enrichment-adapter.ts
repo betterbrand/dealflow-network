@@ -22,37 +22,22 @@ import {
 import { loadSemanticGraph } from "./_core/sparql";
 
 export interface EnrichedProfile {
-  // Core identity
   name: string;
   firstName?: string;
   lastName?: string;
   linkedinId?: string;
   linkedinNumId?: string;
-
-  // Professional
   headline?: string;
-  position?: string;
-
-  // Location
   location?: string;
   city?: string;
   countryCode?: string;
-
-  // Bio
   summary?: string;
-  about?: string;
-
-  // Experience & Education
   experience?: Array<{
     title: string;
     company: string;
-    companyId?: string;
     startDate?: string;
     endDate?: string;
     description?: string;
-    descriptionHtml?: string;
-    url?: string;
-    companyLogoUrl?: string; // NEW: Company logo
   }>;
   education?: Array<{
     school: string;
@@ -60,42 +45,43 @@ export interface EnrichedProfile {
     field?: string;
     startDate?: string;
     endDate?: string;
-    description?: string;
-    url?: string;
-    instituteLogoUrl?: string; // NEW: School logo
   }>;
   educationDetails?: string;
-
-  // Skills & Recognition
   skills?: string[];
-  honorsAndAwards?: any;
-
-  // Social Proof
+  honorsAndAwards?: {
+    title?: string;
+    items?: Array<{ name: string; issuer?: string; date?: string }>;
+  };
   connections?: number;
   followers?: number;
-
-  // Visual Assets
   profilePictureUrl?: string;
-  avatar?: string;
   bannerImage?: string;
-
-  // External Links
-  bioLinks?: Array<{ title: string; link: string }>;
-
-  // Content & Activity
-  posts?: Array<any>;
-  activity?: Array<any>;
-
-  // Network
-  peopleAlsoViewed?: Array<any>;
-
-  // Current Company
-  currentCompany?: any;
-  currentCompanyName?: string;
-
-  // Metadata
+  bioLinks?: Array<{
+    title: string;
+    link: string;
+  }>;
+  posts?: Array<{
+    id: string;
+    title: string;
+    attribution?: string;
+    link: string;
+    createdAt: string;
+    interaction?: string;
+  }>;
+  activity?: Array<{
+    id: string;
+    interaction: string;
+    link: string;
+    title: string;
+    img?: string;
+  }>;
+  peopleAlsoViewed?: Array<{
+    name: string;
+    profileLink: string;
+    about?: string;
+    location?: string;
+  }>;
   memorializedAccount?: boolean;
-
   // RDF/JSON-LD semantic graph
   semanticGraph?: SemanticGraph;
 }
@@ -155,75 +141,32 @@ export async function enrichLinkedInProfile(
     }
 
     console.log("[Enrichment] Successfully enriched LinkedIn profile:", profile.name);
-    console.log("[Enrichment] Profile data:", {
-      name: profile.name,
-      experienceCount: profile.experience?.length || 0,
-      educationCount: profile.education?.length || 0,
-      skillsCount: profile.skills?.length || 0,
-      followers: profile.followers,
-      postsCount: profile.posts?.length || 0,
-      activityCount: profile.activity?.length || 0,
-      networkSuggestions: profile.peopleAlsoViewed?.length || 0,
-      experience: profile.experience,
-    });
 
     return {
-      // Core identity
       name: profile.name || "",
       firstName: profile.firstName,
       lastName: profile.lastName,
       linkedinId: profile.linkedinId,
       linkedinNumId: profile.linkedinNumId,
-
-      // Professional
       headline: profile.headline,
-      position: profile.position,
-
-      // Location
       location: profile.location,
       city: profile.city,
       countryCode: profile.countryCode,
-
-      // Bio
       summary: profile.summary,
-      about: profile.about,
-
-      // Experience & Education (with logos!)
       experience: profile.experience,
       education: profile.education,
       educationDetails: profile.educationDetails,
-
-      // Skills & Recognition
       skills: profile.skills,
       honorsAndAwards: profile.honorsAndAwards,
-
-      // Social Proof
       connections: profile.connections,
       followers: profile.followers,
-
-      // Visual Assets
       profilePictureUrl: profile.profilePictureUrl,
-      avatar: profile.avatar,
       bannerImage: profile.bannerImage,
-
-      // External Links
       bioLinks: profile.bioLinks,
-
-      // Content & Activity
       posts: profile.posts,
       activity: profile.activity,
-
-      // Network
       peopleAlsoViewed: profile.peopleAlsoViewed,
-
-      // Current Company
-      currentCompany: profile.currentCompany,
-      currentCompanyName: profile.currentCompanyName,
-
-      // Metadata
       memorializedAccount: profile.memorializedAccount,
-
-      // Semantic graph
       semanticGraph,
     };
   } catch (error) {

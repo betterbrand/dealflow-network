@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Search } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
-import { CreateContactDialog } from "@/components/CreateContactDialog";
+import { CreateContactDialog } from "@/components/CreateContactDialogNew";
 
 export default function Contacts() {
   const [searchQuery, setSearchQuery] = useState("");

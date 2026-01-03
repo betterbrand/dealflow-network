@@ -196,321 +196,194 @@ export const appRouter = router({
         }
       }),
     
-    // Get available LinkedIn data providers
-    getAvailableProviders: protectedProcedure
-      .query(async () => {
-        const { getAvailableProviders } = await import("./_core/linkedin-provider");
-        return getAvailableProviders();
-      }),
-
-    // Preview import - fetch data without saving
-    getImportPreview: protectedProcedure
-      .input(z.object({
-        linkedinUrl: z.string(),
-        provider: z.enum(['brightdata', 'scrapingdog']).optional(),
-      }))
-      .mutation(async ({ input }) => {
-        const { importLinkedInProfile } = await import("./import-adapter");
-        const { getDefaultProvider } = await import("./_core/linkedin-provider");
-
-        const provider = input.provider || getDefaultProvider();
-        if (!provider) {
-          throw new Error("No LinkedIn data provider configured");
-        }
-
-        console.log('[getImportPreview] Fetching preview using', provider, 'for:', input.linkedinUrl);
-        const imported = await importLinkedInProfile(input.linkedinUrl, { provider });
-
-        // Validate that we got meaningful data
-        const hasName = !!(imported.name || imported.firstName || imported.lastName);
-        const hasHeadline = !!imported.headline;
-        const hasExperience = Array.isArray(imported.experience) && imported.experience.length > 0 && imported.experience.some((e: any) => e.company || e.title);
-
-        if (!hasName && !hasHeadline && !hasExperience) {
-          throw new Error("Profile not found or has no public data. Please check the LinkedIn URL is correct and the profile is publicly visible.");
-        }
-
-        // Return preview data (without saving to DB)
-        return {
-          // Preview fields
-          name: imported.name,
-          firstName: imported.firstName,
-          lastName: imported.lastName,
-          headline: imported.headline,
-          profilePictureUrl: imported.profilePictureUrl,
-          currentCompany: imported.currentCompanyName || imported.experience?.[0]?.company,
-          currentRole: imported.experience?.[0]?.title,
-          location: imported.location,
-          followers: imported.followers,
-          connections: imported.connections,
-          provider,
-          // Full data for saving later
-          _rawData: imported,
-        };
-      }),
-
-    // Confirm import - save previewed data to contact
-    confirmImport: protectedProcedure
-      .input(z.object({
-        contactId: z.number(),
-        importData: z.any(), // The _rawData from preview
-        importCompany: z.boolean().optional(),
-        provider: z.enum(['brightdata', 'scrapingdog']),
-        linkedinUrl: z.string().optional(), // Save the URL used for import
-      }))
-      .mutation(async ({ input }) => {
-        const { updateContactEnrichment, getDb } = await import("./db");
-        const { getOrCreateCompanyForContact } = await import("./db-company-auto-create");
-        const { contacts } = await import("../drizzle/schema");
-        const { eq } = await import("drizzle-orm");
-
-        const data = input.importData;
-        console.log('[confirmImport] Saving imported data for contact:', input.contactId);
-        console.log('[confirmImport] LinkedIn URL:', input.linkedinUrl);
-
-        // Extract company and role
-        let company = data.experience?.[0]?.company || data.currentCompanyName;
-        let role = data.experience?.[0]?.title;
-
-        // Auto-create company if requested
-        let companyId: number | undefined;
-        if (input.importCompany && company) {
-          try {
-            companyId = await getOrCreateCompanyForContact({
-              company,
-              experience: data.experience,
-            }) ?? undefined;
-            if (companyId) {
-              console.log('[confirmImport] Auto-created/linked company:', companyId);
-            }
-          } catch (error) {
-            console.error('[confirmImport] Failed to auto-create company:', error);
-          }
-        }
-
-        // Save to database
-        await updateContactEnrichment(input.contactId, {
-          summary: data.summary,
-          profilePictureUrl: data.profilePictureUrl,
-          experience: data.experience,
-          education: data.education,
-          skills: data.skills,
-          company,
-          role,
-          location: data.location,
-          followers: data.followers,
-          connections: data.connections,
-          bannerImageUrl: data.bannerImage,
-          firstName: data.firstName,
-          lastName: data.lastName,
-          bioLinks: data.bioLinks,
-          posts: data.posts,
-          activity: data.activity,
-          peopleAlsoViewed: data.peopleAlsoViewed,
-          linkedinId: data.linkedinId,
-          linkedinNumId: data.linkedinNumId,
-          city: data.city,
-          countryCode: data.countryCode,
-          memorializedAccount: data.memorializedAccount,
-          educationDetails: data.educationDetails,
-          honorsAndAwards: data.honorsAndAwards,
-        });
-
-        // Update import status and linkedinUrl
-        const db = await getDb();
-        if (db) {
-          const updateData: Record<string, any> = {
-            importStatus: 'complete',
-            importSource: input.provider,
-          };
-          // Save linkedinUrl if provided and not already set
-          if (input.linkedinUrl) {
-            updateData.linkedinUrl = input.linkedinUrl;
-          }
-          await db.update(contacts)
-            .set(updateData)
-            .where(eq(contacts.id, input.contactId));
-        }
-
-        // Generate and persist semantic graph (RDF triples)
-        try {
-          const { transformLinkedInToSemanticGraph } = await import("./_core/semantic-transformer");
-          const { loadSemanticGraph } = await import("./_core/sparql");
-
-          const profile = {
-            name: data.name || data.firstName + ' ' + data.lastName,
-            firstName: data.firstName,
-            lastName: data.lastName,
-            headline: role,
-            position: role,
-            location: data.location,
-            city: data.city,
-            countryCode: data.countryCode,
-            summary: data.summary,
-            profilePictureUrl: data.profilePictureUrl,
-            bannerImage: data.bannerImage,
-            followers: data.followers,
-            connections: data.connections,
-            linkedinId: data.linkedinId,
-            linkedinNumId: data.linkedinNumId,
-            experience: data.experience || [],
-            education: data.education || [],
-            skills: data.skills || [],
-            bioLinks: data.bioLinks,
-            peopleAlsoViewed: data.peopleAlsoViewed,
-          };
-
-          const semanticGraph = transformLinkedInToSemanticGraph(
-            profile,
-            input.linkedinUrl || `internal:contact-${input.contactId}`,
-            { source: "LinkedIn", timestamp: new Date() }
-          );
-
-          await loadSemanticGraph(semanticGraph, input.contactId);
-          console.log(`[confirmImport] Saved semantic graph for contact ${input.contactId}`);
-        } catch (error) {
-          console.error('[confirmImport] Failed to save semantic graph:', error);
-          // Don't fail the import - triples are secondary
-        }
-
-        return {
-          success: true,
-          companyId,
-          experienceCount: data.experience?.length || 0,
-          educationCount: data.education?.length || 0,
-          skillsCount: data.skills?.length || 0,
-        };
-      }),
-
-    // Import from LinkedIn (full flow - fetch and save)
-    importFromLinkedIn: protectedProcedure
-      .input(z.object({
-        linkedinUrl: z.string(),
-        provider: z.enum(['brightdata', 'scrapingdog']).optional(),
-      }))
-      .mutation(async ({ input }) => {
-        const { importLinkedInProfile } = await import("./import-adapter");
-        const { getOrCreateCompanyForContact } = await import("./db-company-auto-create");
-        const { getDefaultProvider } = await import("./_core/linkedin-provider");
-
-        const provider = input.provider || getDefaultProvider();
-        if (!provider) {
-          throw new Error("No LinkedIn data provider configured");
-        }
-
-        console.log('[importFromLinkedIn] Starting import using', provider, 'for:', input.linkedinUrl);
-        const imported = await importLinkedInProfile(input.linkedinUrl, { provider });
-        console.log('[importFromLinkedIn] Import complete, RDF store updated');
-        console.log('[importFromLinkedIn] Company fields in imported data:', {
-          currentCompanyName: imported.currentCompanyName,
-          currentCompany: imported.currentCompany,
-          hasExperience: !!imported.experience,
-          experienceLength: Array.isArray(imported.experience) ? imported.experience.length : 'null/undefined',
-          firstExperienceCompany: imported.experience?.[0]?.company,
-        });
-
-        // Auto-create company if one exists in the imported data
-        try {
-          const companyId = await getOrCreateCompanyForContact({
-            company: imported.experience?.[0]?.company,
-            experience: imported.experience,
-          });
-
-          if (companyId) {
-            console.log('[importFromLinkedIn] Auto-created/linked company:', companyId);
-            return { ...imported, companyId, _provider: provider };
-          }
-        } catch (error) {
-          console.error('[importFromLinkedIn] Failed to auto-create company:', error);
-        }
-
-        console.log('[importFromLinkedIn] Returning to frontend with currentCompanyName:', imported.currentCompanyName);
-        return { ...imported, _provider: provider };
-      }),
-
-    // Import company data from LinkedIn
-    importCompanyFromLinkedIn: protectedProcedure
-      .input(z.object({
-        companyUrl: z.string(),
-        contactId: z.number().optional(),
-        provider: z.enum(['brightdata', 'scrapingdog']).optional(),
-      }))
-      .mutation(async ({ input }) => {
-        const { importLinkedInCompany } = await import("./import-adapter");
-        const { createCompany, getDb } = await import("./db");
-        const { contacts } = await import("../drizzle/schema");
-        const { eq } = await import("drizzle-orm");
-
-        console.log('[importCompanyFromLinkedIn] Importing company:', input.companyUrl);
-        const company = await importLinkedInCompany(input.companyUrl, {
-          provider: input.provider,
-        });
-
-        // Create or update company record
-        const companyId = await createCompany({
-          name: company.name || 'Unknown Company',
-          description: company.description,
-          website: company.website,
-          industry: company.industry,
-          size: company.companySize,
-          location: company.headquarters,
-          foundedYear: company.founded,
-          logoUrl: company.logoUrl,
-          linkedinUrl: company.linkedinUrl,
-          employeeCount: company.employeeCount,
-        });
-
-        // Link to contact if provided
-        if (input.contactId && companyId) {
-          const db = await getDb();
-          if (db) {
-            await db.update(contacts)
-              .set({ companyId })
-              .where(eq(contacts.id, input.contactId));
-          }
-        }
-
-        return { companyId, company };
-      }),
-
-    // Backward compatibility - kept for existing code
     enrichFromLinkedIn: protectedProcedure
       .input(z.object({ linkedinUrl: z.string() }))
       .mutation(async ({ input }) => {
-        const { importLinkedInProfile } = await import("./import-adapter");
+        const { enrichLinkedInProfile } = await import("./enrichment-adapter");
         const { getOrCreateCompanyForContact } = await import("./db-company-auto-create");
 
-        console.log('[enrichFromLinkedIn] Starting import for:', input.linkedinUrl);
-        const enriched = await importLinkedInProfile(input.linkedinUrl);
-        console.log('[enrichFromLinkedIn] Import complete, RDF store updated');
-        console.log('[enrichFromLinkedIn] Company fields in imported data:', {
-          currentCompanyName: enriched.currentCompanyName,
-          currentCompany: enriched.currentCompany,
-          hasExperience: !!enriched.experience,
-          experienceLength: Array.isArray(enriched.experience) ? enriched.experience.length : 'null/undefined',
-          firstExperienceCompany: enriched.experience?.[0]?.company,
-        });
+        console.log('[enrichFromLinkedIn] Starting enrichment for:', input.linkedinUrl);
+        const enriched = await enrichLinkedInProfile(input.linkedinUrl);
+        console.log('[enrichFromLinkedIn] Enrichment complete, RDF store updated');
 
-        // Auto-create company if one exists in the imported data
+        // Auto-create company if one exists in the enriched data
         try {
           const companyId = await getOrCreateCompanyForContact({
-            company: enriched.experience?.[0]?.company,
+            company: enriched.experience?.[0]?.company, // Current/most recent company
             experience: enriched.experience,
           });
 
           if (companyId) {
             console.log('[enrichFromLinkedIn] Auto-created/linked company:', companyId);
+            // Return enriched data with companyId for client to use when saving contact
             return { ...enriched, companyId };
           }
         } catch (error) {
           console.error('[enrichFromLinkedIn] Failed to auto-create company:', error);
+          // Continue without company - don't fail the whole enrichment
         }
 
-        console.log('[enrichFromLinkedIn] Returning to frontend with currentCompanyName:', enriched.currentCompanyName);
-        console.log('[enrichFromLinkedIn] Full imported keys:', Object.keys(enriched).sort().join(', '));
         return enriched;
       }),
-    
+
+    extractFromScreenshot: protectedProcedure
+      .input(z.object({
+        imageBase64: z.string(),
+        imageFormat: z.enum(['png', 'jpg', 'jpeg']),
+      }))
+      .mutation(async ({ input }) => {
+        const { extractTextFromImage } = await import('./_core/ocr');
+        const { extractContactsFromScreenshot } = await import('./morpheus');
+
+        console.log('[extractFromScreenshot] Starting OCR extraction...');
+
+        // Extract text from image using OCR
+        const ocrText = await extractTextFromImage(input.imageBase64);
+        console.log(`[extractFromScreenshot] OCR complete: ${ocrText.length} characters extracted`);
+
+        // Extract contacts from OCR text using AI
+        const contacts = await extractContactsFromScreenshot(ocrText);
+        console.log(`[extractFromScreenshot] Extracted ${contacts.length} contact(s)`);
+
+        return { ocrText, contacts };
+      }),
+
+    enrichMultipleUrls: protectedProcedure
+      .input(z.object({
+        urls: z.array(z.string().url()),
+        platform: z.enum(['linkedin', 'twitter']),
+      }))
+      .mutation(async ({ input }) => {
+        const { enrichLinkedInProfile, enrichTwitterProfile } = await import('./enrichment-adapter');
+
+        console.log(`[enrichMultipleUrls] Starting enrichment for ${input.urls.length} ${input.platform} URLs...`);
+
+        const results = [];
+        const errors = [];
+
+        // Process URLs with concurrency limit (3 at a time to avoid rate limits)
+        const concurrencyLimit = 3;
+        for (let i = 0; i < input.urls.length; i += concurrencyLimit) {
+          const batch = input.urls.slice(i, i + concurrencyLimit);
+
+          const batchPromises = batch.map(async (url) => {
+            try {
+              const enriched = input.platform === 'linkedin'
+                ? await enrichLinkedInProfile(url)
+                : await enrichTwitterProfile(url);
+
+              return { url, success: true, data: enriched };
+            } catch (error) {
+              console.error(`[enrichMultipleUrls] Failed to enrich ${url}:`, error);
+              return {
+                url,
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error',
+              };
+            }
+          });
+
+          const batchResults = await Promise.all(batchPromises);
+          results.push(...batchResults.filter(r => r.success));
+          errors.push(...batchResults.filter(r => !r.success));
+        }
+
+        console.log(`[enrichMultipleUrls] Enrichment complete: ${results.length} successful, ${errors.length} failed`);
+
+        return { results, errors };
+      }),
+
+    parseCsv: protectedProcedure
+      .input(z.object({
+        csvText: z.string(),
+        customMapping: z.record(z.string(), z.string()).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { parseCsvToContacts } = await import('./_core/csv-parser');
+
+        console.log('[parseCsv] Starting CSV parsing...');
+
+        const result = await parseCsvToContacts(input.csvText, input.customMapping);
+
+        console.log(`[parseCsv] Parsing complete: ${result.successfulRows}/${result.totalRows} rows successful`);
+
+        return result;
+      }),
+
+    createBulk: protectedProcedure
+      .input(z.object({
+        contacts: z.array(z.object({
+          name: z.string(),
+          company: z.string().optional(),
+          role: z.string().optional(),
+          email: z.string().optional(),
+          phone: z.string().optional(),
+          location: z.string().optional(),
+          telegramUsername: z.string().optional(),
+          linkedinUrl: z.string().optional(),
+          twitterUrl: z.string().optional(),
+          notes: z.string().optional(),
+          conversationSummary: z.string().optional(),
+          sentiment: z.string().optional(),
+          interestLevel: z.string().optional(),
+        })),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { createOrLinkContact } = await import('./db-collaborative');
+        const { getOrCreateCompanyForContact } = await import('./db-company-auto-create');
+
+        console.log(`[createBulk] Creating ${input.contacts.length} contacts...`);
+
+        const results = [];
+
+        for (const contactData of input.contacts) {
+          try {
+            // Auto-create company if company name exists
+            let companyId: number | null | undefined;
+            if (contactData.company) {
+              try {
+                companyId = await getOrCreateCompanyForContact({
+                  company: contactData.company,
+                });
+              } catch (error) {
+                console.error('[createBulk] Failed to auto-create company:', error);
+              }
+            }
+
+            const { contactId, isNew, matchedBy } = await createOrLinkContact(
+              ctx.user.id,
+              { ...contactData, companyId },
+              {
+                privateNotes: contactData.notes,
+                conversationSummary: contactData.conversationSummary,
+                sentiment: contactData.sentiment as any,
+                interestLevel: contactData.interestLevel as any,
+              }
+            );
+
+            results.push({
+              success: true,
+              contactId,
+              isNew,
+              matchedBy,
+              name: contactData.name,
+            });
+          } catch (error) {
+            console.error(`[createBulk] Failed to create contact ${contactData.name}:`, error);
+            results.push({
+              success: false,
+              name: contactData.name,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            });
+          }
+        }
+
+        const successful = results.filter(r => r.success).length;
+        console.log(`[createBulk] Bulk creation complete: ${successful}/${input.contacts.length} successful`);
+
+        return { results, total: input.contacts.length, successful };
+      }),
+
     create: protectedProcedure
       .input(z.object({
         name: z.string(),
@@ -529,14 +402,12 @@ export const appRouter = router({
         interestLevel: z.string().optional(),
         eventId: z.number().optional(),
         companyId: z.number().optional(),
-        opportunity: z.string().optional(), // Why this contact matters - deal/opportunity context
-        skipEnrichment: z.boolean().optional(), // Skip background enrichment if already enriched
       }))
       .mutation(async ({ input, ctx }) => {
         const { createOrLinkContact } = await import("./db-collaborative");
         const { getDb } = await import("./db");
         const { socialProfiles } = await import("../drizzle/schema");
-        const { importContactBackground } = await import("./import");
+        const { enrichContactBackground } = await import("./enrichment");
         const { getOrCreateCompanyForContact } = await import("./db-company-auto-create");
 
         // Separate shared contact data from user-specific data
@@ -590,15 +461,11 @@ export const appRouter = router({
             });
           }
           await db.insert(socialProfiles).values(profiles);
-
-          // Start background import (unless skipEnrichment is true)
-          if (!input.skipEnrichment) {
-            importContactBackground(contactId, profiles).catch((err: Error) => {
-              console.error("Background import failed:", err);
-            });
-          } else {
-            console.log(`[contacts.create] Skipping background import for contact ${contactId} (already imported)`);
-          }
+          
+          // Start background enrichment
+          enrichContactBackground(contactId, profiles).catch(err => {
+            console.error("Background enrichment failed:", err);
+          });
         }
         
         return { id: contactId };
@@ -623,112 +490,16 @@ export const appRouter = router({
         interestLevel: z.string().optional(),
         eventId: z.number().optional(),
         companyId: z.number().optional(),
-
-        // Enriched fields from BrightData
-        summary: z.string().optional(),
-        profilePictureUrl: z.string().optional(),
-        experience: z.any().optional(),
-        education: z.any().optional(),
-        skills: z.any().optional(),
-        followers: z.number().optional(),
-        connections: z.number().optional(),
-        bannerImage: z.string().optional(),
-        firstName: z.string().optional(),
-        lastName: z.string().optional(),
-        bioLinks: z.any().optional(),
-        posts: z.any().optional(),
-        activity: z.any().optional(),
-        peopleAlsoViewed: z.any().optional(),
-        linkedinId: z.string().optional(),
-        linkedinNumId: z.string().optional(),
-        city: z.string().optional(),
-        countryCode: z.string().optional(),
-        educationDetails: z.string().optional(),
-        honorsAndAwards: z.any().optional(),
-        memorializedAccount: z.boolean().optional(),
       }))
       .mutation(async ({ input }) => {
-        const { updateContact, getContactById, updateContactEnrichment } = await import("./db");
+        const { updateContact, getContactById } = await import("./db");
         const { getDb } = await import("./db");
         const { socialProfiles } = await import("../drizzle/schema");
-        const { importContactBackground } = await import("./import");
+        const { enrichContactBackground } = await import("./enrichment");
         const { getOrCreateCompanyForContact } = await import("./db-company-auto-create");
         const { eq, and } = await import("drizzle-orm");
 
-        const {
-          id,
-          linkedinUrl,
-          twitterUrl,
-          // Extract enriched fields
-          summary,
-          profilePictureUrl,
-          experience,
-          education,
-          skills,
-          followers,
-          connections,
-          bannerImage,
-          firstName,
-          lastName,
-          bioLinks,
-          posts,
-          activity,
-          peopleAlsoViewed,
-          linkedinId,
-          linkedinNumId,
-          city,
-          countryCode,
-          educationDetails,
-          honorsAndAwards,
-          memorializedAccount,
-          ...data
-        } = input;
-
-        // Save enriched data if provided
-        const hasEnrichedData = summary || profilePictureUrl || experience || education ||
-                                skills || followers !== undefined || connections !== undefined || bannerImage ||
-                                firstName || lastName || bioLinks || posts || activity ||
-                                peopleAlsoViewed || linkedinId || linkedinNumId ||
-                                city || countryCode || educationDetails || honorsAndAwards;
-
-        if (hasEnrichedData) {
-          const enrichedData = {
-            summary,
-            profilePictureUrl,
-            experience,
-            education,
-            skills,
-            followers,
-            connections,
-            bannerImageUrl: bannerImage,
-            firstName,
-            lastName,
-            bioLinks,
-            posts,
-            activity,
-            peopleAlsoViewed,
-            linkedinId,
-            linkedinNumId,
-            city,
-            countryCode,
-            educationDetails,
-            honorsAndAwards,
-            memorializedAccount,
-          };
-
-          console.log('[contacts.update] Saving enriched data for contact', id);
-          console.log('[contacts.update] Enriched fields:', {
-            hasExperience: !!experience,
-            hasEducation: !!education,
-            hasSkills: !!skills,
-            followers,
-            connections,
-            hasPosts: !!posts,
-            hasBioLinks: !!bioLinks,
-          });
-
-          await updateContactEnrichment(id, enrichedData);
-        }
+        const { id, linkedinUrl, twitterUrl, ...data } = input;
 
         // Auto-create company if company name is being updated and no explicit companyId provided
         if (!data.companyId && data.company) {
@@ -792,16 +563,106 @@ export const appRouter = router({
           if (profiles.length > 0) {
             await db.insert(socialProfiles).values(profiles);
             
-            // Start background import
-            importContactBackground(id, profiles).catch((err: Error) => {
-              console.error("Background import failed:", err);
+            // Start background enrichment
+            enrichContactBackground(id, profiles).catch(err => {
+              console.error("Background enrichment failed:", err);
             });
           }
         }
-        
+
         return { success: true };
       }),
-    
+
+    // Stub endpoints for import provider system (exists on main, not on this branch)
+    getAvailableProviders: protectedProcedure.query(async (): Promise<Array<{
+      id: string;
+      name: string;
+      speed: 'fast' | 'slow';
+    }>> => {
+      // Return empty list - this feature exists on main
+      return [];
+    }),
+
+    getImportPreview: protectedProcedure
+      .input(z.object({
+        provider: z.string(),
+        credentialId: z.number().optional(),
+        linkedinUrl: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        // Stub - return empty preview
+        return {
+          contacts: [],
+          provider: input.provider,
+        };
+      }),
+
+    confirmImport: protectedProcedure
+      .input(z.object({
+        provider: z.string(),
+        contacts: z.array(z.any()).optional(),
+        contactId: z.number().optional(),
+        importData: z.any().optional(),
+        importCompany: z.boolean().optional(),
+        linkedinUrl: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        // Stub - return success with no imports
+        return {
+          success: true,
+          importedCount: 0,
+        };
+      }),
+
+    getUserCentricGraph: protectedProcedure
+      .input(
+        z.object({
+          maxDepth: z.number().min(1).max(4).default(3),
+          maxNodesPerDegree: z.number().min(5).max(50).default(20),
+        }).optional()
+      )
+      .query(async ({ ctx, input }): Promise<{
+        nodes: Array<{
+          id: number;
+          name: string;
+          company?: string;
+          role?: string;
+          degree: number;
+          isUser?: boolean;
+          followers?: number;
+          connections?: number;
+          profilePictureUrl?: string;
+        }>;
+        edges: Array<{
+          from: number;
+          to: number;
+          source: number;
+          target: number;
+          relationshipType?: string;
+          edgeType?: string;
+          strength?: number;
+        }>;
+        stats: {
+          totalNodes: number;
+          totalEdges: number;
+          maxDepth: number;
+          edgesByType: Record<string, number>;
+        };
+      }> => {
+        // Stub - db-graph module exists on main but not on this branch
+        // Return empty graph for now
+        return {
+          nodes: [],
+          edges: [],
+          stats: {
+            totalNodes: 0,
+            totalEdges: 0,
+            maxDepth: input?.maxDepth || 3,
+            edgesByType: {},
+          },
+        };
+      }),
+
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
@@ -920,14 +781,14 @@ export const appRouter = router({
       const { getAllContacts } = await import("./db");
       const { contactRelationships } = await import("../drizzle/schema");
       const { getDb } = await import("./db");
-
+      
       // Get all contacts for the user
       const contacts = await getAllContacts(ctx.user.id);
-
+      
       // Get all relationships
       const db = await getDb();
       const relationships = db ? await db.select().from(contactRelationships) : [];
-
+      
       // Transform to graph format
       const nodes = contacts.map(c => ({
         id: c.contact.id,
@@ -935,49 +796,15 @@ export const appRouter = router({
         company: c.contact.company || undefined,
         role: c.contact.role || undefined,
       }));
-
-      // Get set of valid node IDs for filtering
-      const validNodeIds = new Set(nodes.map(n => n.id));
-
-      // Filter relationships to only include edges where both nodes exist
-      const links = relationships
-        .filter((rel: any) => validNodeIds.has(rel.fromContactId) && validNodeIds.has(rel.toContactId))
-        .map((rel: any) => ({
-          source: rel.fromContactId,
-          target: rel.toContactId,
-          relationshipType: rel.relationshipType || undefined,
-        }));
-
+      
+      const links = relationships.map((rel: any) => ({
+        source: rel.fromContactId,
+        target: rel.toContactId,
+        relationshipType: rel.relationshipType || undefined,
+      }));
+      
       return { nodes, links };
     }),
-
-    getUserCentricGraph: protectedProcedure
-      .input(
-        z.object({
-          maxDepth: z.number().min(1).max(4).default(3),
-          maxNodesPerDegree: z.number().min(5).max(50).default(20),
-        }).optional()
-      )
-      .query(async ({ ctx, input }) => {
-        const config = input ?? { maxDepth: 3, maxNodesPerDegree: 20 };
-        const { buildUserCentricGraph } = await import("./db-graph");
-
-        const result = await buildUserCentricGraph(
-          ctx.user.id,
-          config.maxDepth,
-          config.maxNodesPerDegree
-        );
-
-        return result;
-      }),
-
-    computeInferredEdges: protectedProcedure
-      .input(z.object({ contactId: z.number() }))
-      .mutation(async ({ input }) => {
-        const { computeInferredEdgesForContact } = await import("./services/inferred-edges.service");
-        const edgesCreated = await computeInferredEdgesForContact(input.contactId);
-        return { success: true, edgesCreated };
-      }),
   }),
 
   // Semantic Graph and SPARQL endpoints
@@ -997,27 +824,6 @@ export const appRouter = router({
       const { getGraphStats } = await import("./_core/sparql");
       return getGraphStats();
     }),
-
-    // Get triples for a specific contact (from DB)
-    getContactTriples: protectedProcedure
-      .input(z.object({ contactId: z.number() }))
-      .query(async ({ input }) => {
-        const { getContactTriples, formatPredicate, groupTriplesByPredicate } = await import("./_core/triple-store");
-        const triples = await getContactTriples(input.contactId);
-
-        return {
-          tripleCount: triples.length,
-          triples: triples.map(t => ({
-            id: t.id,
-            subject: t.subject.split("/").pop() || t.subject,
-            predicate: formatPredicate(t.predicate),
-            predicateFull: t.predicate,
-            object: t.object,
-            objectType: t.objectType,
-          })),
-          grouped: groupTriplesByPredicate(triples),
-        };
-      }),
 
     // Re-enrich contact and load semantic graph
     // Phase 1: Semantic graphs are loaded automatically during LinkedIn enrichment
@@ -1054,6 +860,19 @@ export const appRouter = router({
       console.log('[getAllEntities] Query returned:', result.results?.length || 0, 'triples');
       return result;
     }),
+
+    // Get triples for a specific contact (from DB)
+    getContactTriples: protectedProcedure
+      .input(z.object({ contactId: z.number() }))
+      .query(async ({ input }) => {
+        // This is a stub - the triple-store module exists on main but not on this branch
+        // Return empty result for now
+        return {
+          tripleCount: 0,
+          triples: [],
+          grouped: {},
+        };
+      }),
 
     // Predefined query: Find all people
     getAllPeople: protectedProcedure.query(async () => {
@@ -1197,6 +1016,13 @@ export const appRouter = router({
       const { getContactsForGraph } = await import("./db");
       return await getContactsForGraph();
     }),
+
+    computeInferredEdges: protectedProcedure
+      .input(z.object({ contactId: z.number() }))
+      .mutation(async ({ input }) => {
+        // Stub - inferred-edges service exists on main but not on this branch
+        return { success: true, edgesCreated: 0 };
+      }),
   }),
   
   relationships: router({
@@ -1320,7 +1146,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         const { sendMessage } = await import("./telegram");
-        const { importContactBackground } = await import("./import");
+        const { enrichContactBackground } = await import("./enrichment");
         const { getDb } = await import("./db");
         const { socialProfiles } = await import("../drizzle/schema");
         const { eq, and } = await import("drizzle-orm");
@@ -1334,10 +1160,10 @@ export const appRouter = router({
           .from(socialProfiles)
           .where(eq(socialProfiles.contactId, input.contactId));
         
-        // Start background import
+        // Start background enrichment
         if (profiles.length > 0) {
-          importContactBackground(input.contactId, profiles).catch((err: Error) => {
-            console.error("Background import failed:", err);
+          enrichContactBackground(input.contactId, profiles).catch(err => {
+            console.error("Background enrichment failed:", err);
           });
         }
         
@@ -1411,77 +1237,33 @@ export const appRouter = router({
         message: z.string().min(1).max(2000),
       }))
       .mutation(async ({ input, ctx }) => {
-        const { getOrCreateConversationalSession, addConversationMessage, getConversationHistory } = await import("./services/agent/db");
-        const { parseMessage } = await import("./services/agent/conversation/intent-parser");
-        const { generateResponse, generateGreetingResponse, generateControlResponse, generateErrorResponse } = await import("./services/agent/conversation/response-generator");
-        const { updateSessionStatus } = await import("./services/agent/db");
-
-        const userId = ctx.user.id;
-
-        try {
-          const sessionId = await getOrCreateConversationalSession(userId, input.sessionId);
-          const history = await getConversationHistory(sessionId, 10);
-          const conversationHistory = history.reverse().map((m) => ({
-            role: m.role as "user" | "agent",
-            content: m.content,
-          }));
-
-          await addConversationMessage(sessionId, "user", input.message);
-          const analysis = await parseMessage(input.message, conversationHistory);
-
-          let response;
-
-          switch (analysis.intent.type) {
-            case "greeting":
-              response = generateGreetingResponse(sessionId);
-              break;
-            case "agent_control":
-              const action = analysis.intent.entities.query || "pause";
-              if (action === "pause") await updateSessionStatus(sessionId, "paused");
-              else if (action === "resume") await updateSessionStatus(sessionId, "running");
-              response = generateControlResponse(action, sessionId);
-              break;
-            default:
-              response = await generateResponse(
-                { analysis, sessionId, conversationHistory },
-                {
-                  scenario: "general_response",
-                  values: { query: input.message },
-                  suggestedFollowups: ["Who can introduce me to someone at [company]?", "Show me my strongest connections"],
-                  confidence: 0.6,
-                }
-              );
-          }
-
-          await addConversationMessage(sessionId, "agent", response.content, {
-            sentiment: analysis.sentiment.mood,
-            tone: response.tone,
-            intentType: analysis.intent.type,
-          });
-
-          return response;
-        } catch (error) {
-          console.error("[Agent] Chat error:", error);
-          return generateErrorResponse(error instanceof Error ? error.message : "Unknown error", input.sessionId || 0);
-        }
+        // Stub - agent services exist on main but not on this branch
+        // Return a proper AgentResponse for now
+        return {
+          content: "Agent feature is not yet available on this branch. It will be available after merging with main.",
+          tone: "neutral" as const,
+          suggestedDelayMs: 800,
+          showTypingIndicator: false,
+          confidence: 100,
+          canRetry: false,
+          sessionId: input.sessionId || 0,
+          reasoningSummary: undefined,
+          suggestedFollowups: undefined,
+        };
       }),
 
     getSessions: protectedProcedure
       .input(z.object({ limit: z.number().min(1).max(50).default(10) }).optional())
       .query(async ({ ctx, input }) => {
-        const { getUserSessions } = await import("./services/agent/db");
-        return getUserSessions(ctx.user.id, input?.limit || 10);
+        // Stub - return empty sessions
+        return [];
       }),
 
     getSession: protectedProcedure
       .input(z.object({ sessionId: z.number() }))
       .query(async ({ input, ctx }) => {
-        const { getSession } = await import("./services/agent/db");
-        const session = await getSession(input.sessionId);
-        if (session && session.userId !== ctx.user.id) {
-          return null;
-        }
-        return session;
+        // Stub - return null
+        return null;
       }),
 
     getConversation: protectedProcedure
@@ -1490,13 +1272,8 @@ export const appRouter = router({
         limit: z.number().min(1).max(100).default(50),
       }))
       .query(async ({ input, ctx }) => {
-        const { getSession, getConversationHistory } = await import("./services/agent/db");
-        const session = await getSession(input.sessionId);
-        if (!session || session.userId !== ctx.user.id) {
-          return [];
-        }
-        const messages = await getConversationHistory(input.sessionId, input.limit);
-        return messages.reverse();
+        // Stub - return empty conversation
+        return [];
       }),
 
     startSession: protectedProcedure
@@ -1505,54 +1282,14 @@ export const appRouter = router({
         goal: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        const { createSession } = await import("./services/agent/db");
-        const sessionId = await createSession(ctx.user.id, input.sessionType, input.goal);
-        return { sessionId };
-      }),
-
-    pauseSession: protectedProcedure
-      .input(z.object({ sessionId: z.number() }))
-      .mutation(async ({ input, ctx }) => {
-        const { getSession, updateSessionStatus } = await import("./services/agent/db");
-        const session = await getSession(input.sessionId);
-        if (!session || session.userId !== ctx.user.id) {
-          throw new Error("Session not found");
-        }
-        await updateSessionStatus(input.sessionId, "paused");
-        return { success: true };
-      }),
-
-    resumeSession: protectedProcedure
-      .input(z.object({ sessionId: z.number() }))
-      .mutation(async ({ input, ctx }) => {
-        const { getSession, updateSessionStatus } = await import("./services/agent/db");
-        const session = await getSession(input.sessionId);
-        if (!session || session.userId !== ctx.user.id) {
-          throw new Error("Session not found");
-        }
-        await updateSessionStatus(input.sessionId, "running");
-        return { success: true };
-      }),
-
-    getFindings: protectedProcedure
-      .input(z.object({
-        status: z.enum(["pending", "confirmed", "dismissed"]).optional(),
-        limit: z.number().min(1).max(100).default(20),
-      }).optional())
-      .query(async ({ ctx, input }) => {
-        const { getFindings } = await import("./services/agent/db");
-        return getFindings(ctx.user.id, input?.status, input?.limit || 20);
-      }),
-
-    reviewFinding: protectedProcedure
-      .input(z.object({
-        findingId: z.number(),
-        action: z.enum(["confirm", "dismiss"]),
-      }))
-      .mutation(async ({ input }) => {
-        const { reviewFinding } = await import("./services/agent/db");
-        await reviewFinding(input.findingId, input.action);
-        return { success: true };
+        // Stub - return placeholder session
+        return {
+          id: 0,
+          userId: ctx.user.id,
+          sessionType: input.sessionType,
+          status: "paused",
+          createdAt: new Date(),
+        };
       }),
   }),
 });

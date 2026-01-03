@@ -1,20 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { createRelationship, getRelationshipsForContact, deleteRelationship, getDb } from './db';
+import { createRelationship, getRelationshipsForContact, deleteRelationship } from './db';
+import { getDb } from './db';
 import { contacts, contactRelationships } from '../drizzle/schema';
 import { eq, or } from 'drizzle-orm';
 
-// Skip in CI or if no database URL - these are integration tests
-const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
-const hasDb = !!process.env.DATABASE_URL;
-
-describe.skipIf(isCI || !hasDb)('Relationship Management', () => {
+describe('Relationship Management', () => {
   let testContactId1: number;
   let testContactId2: number;
   let testRelationshipId: number;
 
   beforeAll(async () => {
     const db = await getDb();
-    if (!db) return;
+    if (!db) throw new Error('Database not available');
 
     // Create test contacts with unique names to avoid conflicts
     const timestamp = Date.now();

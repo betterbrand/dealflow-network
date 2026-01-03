@@ -1,0 +1,14 @@
+# Commit message template
+#
+# NO AI ATTRIBUTIONS - This is a strict project policy
+# Do NOT add:
+# - "Generated with Claude Code" or similar
+# - "Co-Authored-By: Claude/ChatGPT/AI" or similar
+# - Any emojis unless explicitly requested
+#
+# Format:
+# <type>: <subject>
+#
+# <body>
+#
+# Types: feat, fix, docs, style, refactor, test, chore
