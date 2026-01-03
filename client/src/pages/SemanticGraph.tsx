@@ -117,7 +117,7 @@ export default function SemanticGraph() {
           color = "#10b981"; // Green
         } else if (typeField.includes("Activity")) {
           entityType = "Activity";
-          color = "#f59e0b"; // Orange
+          color = "#1E6FD9"; // Sapphire Blue
         }
       }
 

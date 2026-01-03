@@ -52,13 +52,13 @@ export function GraphMinimap({ cy, width = 200, height = 150 }: GraphMinimapProp
       const vpW = (ext.x2 - ext.x1) * scale;
       const vpH = (ext.y2 - ext.y1) * scale;
 
-      ctx.strokeStyle = "#F97316"; // orange-500
+      ctx.strokeStyle = "#0F52BA"; // sapphire blue-700
       ctx.lineWidth = 2;
       ctx.globalAlpha = 1;
       ctx.strokeRect(vpX, vpY, vpW, vpH);
 
       // Semi-transparent fill for viewport
-      ctx.fillStyle = "#F97316";
+      ctx.fillStyle = "#0F52BA";
       ctx.globalAlpha = 0.1;
       ctx.fillRect(vpX, vpY, vpW, vpH);
     };
