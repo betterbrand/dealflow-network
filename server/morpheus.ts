@@ -173,6 +173,30 @@ Return an array of contact objects, one for each person.`,
 }
 
 /**
+ * Extract contacts from screenshot OCR text
+ * This is optimized for text extracted from screenshots, which may contain OCR artifacts
+ */
+export async function extractContactsFromScreenshot(
+  ocrText: string
+): Promise<ExtractedContact[]> {
+  console.log('[Morpheus] Extracting contacts from screenshot OCR text...');
+
+  // Use the existing extractMultipleContacts function
+  // The OCR text is already processed, so we just need to extract contacts
+  try {
+    const contacts = await extractMultipleContacts(ocrText);
+    console.log(`[Morpheus] Successfully extracted ${contacts.length} contact(s) from screenshot`);
+    return contacts;
+  } catch (error) {
+    console.error('[Morpheus] Failed to extract contacts from screenshot:', error);
+    throw new Error(
+      `Failed to extract contacts from screenshot: ${error instanceof Error ? error.message : 'Unknown error'}. ` +
+      'The screenshot text may not contain valid contact information.'
+    );
+  }
+}
+
+/**
  * Determine if a conversation contains networking content worth extracting
  */
 export async function isNetworkingConversation(conversationText: string): Promise<boolean> {
