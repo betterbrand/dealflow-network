@@ -1,25 +1,85 @@
 import { eq, sql, and, desc, like, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { 
-  InsertUser, users, 
+import mysql from "mysql2";
+import {
+  InsertUser, users,
   contacts, companies, events, conversations, socialProfiles, contactRelationships, contactPhotos,
   InsertContact, InsertCompany, InsertEvent, InsertConversation, InsertSocialProfile, InsertContactPhoto, InsertContactRelationship
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
+let _pool: mysql.Pool | null = null;
 let _db: ReturnType<typeof drizzle> | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
+// Connection pool configuration
+const POOL_CONFIG = {
+  connectionLimit: parseInt(process.env.DB_POOL_SIZE || "10", 10),
+  waitForConnections: true,
+  queueLimit: 0,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 10000,
+  maxIdle: 10,
+  idleTimeout: 60000,
+  connectTimeout: 10000,
+};
+
+// Lazily create the connection pool and drizzle instance
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      // Create connection pool if it doesn't exist
+      if (!_pool) {
+        _pool = mysql.createPool({
+          uri: process.env.DATABASE_URL,
+          ...POOL_CONFIG,
+        });
+
+        console.log("[Database] Connection pool created successfully");
+      }
+
+      // Create drizzle instance with the pool
+      _db = drizzle(_pool);
     } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
+      console.warn("[Database] Failed to create connection pool:", error);
+      _pool = null;
       _db = null;
     }
   }
   return _db;
+}
+
+// Get pool metrics for monitoring
+export function getPoolMetrics() {
+  if (!_pool) {
+    return null;
+  }
+
+  // Note: mysql2 doesn't expose internal pool metrics in TypeScript
+  // For detailed monitoring, consider adding a monitoring library
+  return {
+    connectionLimit: POOL_CONFIG.connectionLimit,
+    isActive: _pool !== null,
+  };
+}
+
+// Graceful shutdown - close all pool connections
+export async function closePool() {
+  if (_pool) {
+    console.log("[Database] Closing connection pool...");
+    return new Promise<void>((resolve, reject) => {
+      _pool!.end((err) => {
+        if (err) {
+          console.error("[Database] Error closing pool:", err);
+          reject(err);
+        } else {
+          _pool = null;
+          _db = null;
+          console.log("[Database] Connection pool closed");
+          resolve();
+        }
+      });
+    });
+  }
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
@@ -157,6 +217,27 @@ export async function getAllContacts(userId?: number) {
         createdBy: uc.createdBy,
         createdAt: uc.createdAt,
         updatedAt: uc.updatedAt,
+        // Import fields
+        followers: uc.followers,
+        connections: uc.connections,
+        bannerImageUrl: uc.bannerImageUrl,
+        firstName: uc.firstName,
+        lastName: uc.lastName,
+        bioLinks: uc.bioLinks,
+        posts: uc.posts,
+        activity: uc.activity,
+        peopleAlsoViewed: uc.peopleAlsoViewed,
+        linkedinId: uc.linkedinId,
+        linkedinNumId: uc.linkedinNumId,
+        city: uc.city,
+        countryCode: uc.countryCode,
+        memorializedAccount: uc.memorializedAccount,
+        educationDetails: uc.educationDetails,
+        honorsAndAwards: uc.honorsAndAwards,
+        lastImportedAt: uc.lastImportedAt,
+        importSource: uc.importSource,
+        importStatus: uc.importStatus,
+        opportunity: uc.opportunity,
         // Map user-specific fields back to contact for compatibility
         notes: uc.privateNotes,
         conversationSummary: uc.conversationSummary,
@@ -230,7 +311,7 @@ export async function searchContacts(query: string) {
 export async function createCompany(data: InsertCompany) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  
+
   const [company] = await db.insert(companies).values(data).$returningId();
   return company.id;
 }
@@ -469,42 +550,251 @@ export async function deleteRelationship(id: number) {
 
 
 /**
- * Update contact with enriched data from LinkedIn/Twitter
+ * Update contact with imported data from LinkedIn/Twitter
  */
-export async function updateContactEnrichment(
+export async function updateContactImport(
   contactId: number,
-  enrichedData: {
+  importedData: {
+    // Core fields (existing)
     summary?: string;
     profilePictureUrl?: string;
     experience?: Array<any>;
     education?: Array<any>;
     skills?: string[];
+    company?: string;
+    role?: string;
+    location?: string;
+
+    // === NEW: Step 1 - Social Proof ===
+    followers?: number;
+    connections?: number;
+
+    // === NEW: Step 2 - Visual Assets ===
+    bannerImageUrl?: string;
+
+    // === NEW: Step 3 - Name Parsing ===
+    firstName?: string;
+    lastName?: string;
+
+    // === NEW: Step 4 - External Links ===
+    bioLinks?: Array<{ title: string; link: string }>;
+
+    // === NEW: Step 5 - Content & Activity ===
+    posts?: Array<any>;
+    activity?: Array<any>;
+
+    // === NEW: Step 6 - Network ===
+    peopleAlsoViewed?: Array<any>;
+
+    // === NEW: Additional Metadata ===
+    linkedinId?: string;
+    linkedinNumId?: string;
+    city?: string;
+    countryCode?: string;
+    memorializedAccount?: boolean;
+    educationDetails?: string;
+    honorsAndAwards?: any;
   }
 ): Promise<void> {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot update contact enrichment: database not available");
+    console.warn("[Database] Cannot update contact import: database not available");
     return;
   }
 
   try {
     const updateData: Record<string, any> = {};
-    
-    if (enrichedData.summary) updateData.summary = enrichedData.summary;
-    if (enrichedData.profilePictureUrl) updateData.profilePictureUrl = enrichedData.profilePictureUrl;
-    if (enrichedData.experience) updateData.experience = JSON.stringify(enrichedData.experience);
-    if (enrichedData.education) updateData.education = JSON.stringify(enrichedData.education);
-    if (enrichedData.skills) updateData.skills = JSON.stringify(enrichedData.skills);
+
+    // Existing fields
+    if (importedData.summary) updateData.summary = importedData.summary;
+    if (importedData.profilePictureUrl) updateData.profilePictureUrl = importedData.profilePictureUrl;
+    if (importedData.experience) updateData.experience = JSON.stringify(importedData.experience);
+    if (importedData.education) updateData.education = JSON.stringify(importedData.education);
+    if (importedData.skills) updateData.skills = JSON.stringify(importedData.skills);
+    if (importedData.company) updateData.company = importedData.company;
+    if (importedData.role) updateData.role = importedData.role;
+    if (importedData.location) updateData.location = importedData.location;
+
+    // === Step 1: Social Proof ===
+    if (importedData.followers !== undefined) updateData.followers = importedData.followers;
+    if (importedData.connections !== undefined) updateData.connections = importedData.connections;
+
+    // === Step 2: Visual Assets ===
+    if (importedData.bannerImageUrl) updateData.bannerImageUrl = importedData.bannerImageUrl;
+
+    // === Step 3: Name Parsing ===
+    if (importedData.firstName) updateData.firstName = importedData.firstName;
+    if (importedData.lastName) updateData.lastName = importedData.lastName;
+
+    // === Step 4: External Links ===
+    if (importedData.bioLinks) updateData.bioLinks = JSON.stringify(importedData.bioLinks);
+
+    // === Step 5: Content & Activity ===
+    if (importedData.posts) updateData.posts = JSON.stringify(importedData.posts);
+    if (importedData.activity) updateData.activity = JSON.stringify(importedData.activity);
+
+    // === Step 6: Network ===
+    if (importedData.peopleAlsoViewed) updateData.peopleAlsoViewed = JSON.stringify(importedData.peopleAlsoViewed);
+
+    // === Additional Metadata ===
+    if (importedData.linkedinId) updateData.linkedinId = importedData.linkedinId;
+    if (importedData.linkedinNumId) updateData.linkedinNumId = importedData.linkedinNumId;
+    if (importedData.city) updateData.city = importedData.city;
+    if (importedData.countryCode) updateData.countryCode = importedData.countryCode;
+    if (importedData.memorializedAccount !== undefined) updateData.memorializedAccount = importedData.memorializedAccount ? 1 : 0;
+    if (importedData.educationDetails) updateData.educationDetails = importedData.educationDetails;
+    if (importedData.honorsAndAwards) updateData.honorsAndAwards = JSON.stringify(importedData.honorsAndAwards);
+
+    // Import metadata
+    updateData.lastImportedAt = new Date();
+    updateData.importSource = 'brightdata';
 
     if (Object.keys(updateData).length > 0) {
       await db.update(contacts)
         .set(updateData)
         .where(eq(contacts.id, contactId));
-      
-      console.log(`[Database] Updated contact ${contactId} with enriched data`);
+
+      console.log(`[Database] Updated contact ${contactId} with imported data`);
+      console.log(`[Database] Saved company: ${importedData.company || 'none'}, role: ${importedData.role || 'none'}`);
+      console.log(`[Database] Saved ${importedData.followers || 0} followers, ${importedData.posts?.length || 0} posts, ${importedData.peopleAlsoViewed?.length || 0} network suggestions`);
     }
   } catch (error) {
-    console.error(`[Database] Failed to update contact enrichment:`, error);
+    console.error(`[Database] Failed to update contact import:`, error);
     throw error;
   }
+}
+
+/**
+ * @deprecated Use updateContactImport instead
+ */
+export async function updateContactEnrichment(
+  contactId: number,
+  importedData: Parameters<typeof updateContactImport>[1]
+) {
+  return updateContactImport(contactId, importedData);
+}
+
+// ============================================
+// User Profile Functions
+// ============================================
+
+/**
+ * Get full user profile
+ */
+export async function getUserProfile(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  return result[0] || null;
+}
+
+/**
+ * Update user profile
+ */
+export async function updateUserProfile(
+  userId: number,
+  data: {
+    name?: string;
+    phone?: string;
+    telegramUsername?: string;
+    company?: string;
+    jobTitle?: string;
+    location?: string;
+    linkedinUrl?: string;
+    twitterUrl?: string;
+    bio?: string;
+    profilePictureUrl?: string;
+    bannerImageUrl?: string;
+    firstName?: string;
+    lastName?: string;
+  }
+) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const updateData: Record<string, unknown> = {};
+
+  // Only include fields that are explicitly provided
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.phone !== undefined) updateData.phone = data.phone;
+  if (data.telegramUsername !== undefined) updateData.telegramUsername = data.telegramUsername;
+  if (data.company !== undefined) updateData.company = data.company;
+  if (data.jobTitle !== undefined) updateData.jobTitle = data.jobTitle;
+  if (data.location !== undefined) updateData.location = data.location;
+  if (data.linkedinUrl !== undefined) updateData.linkedinUrl = data.linkedinUrl;
+  if (data.twitterUrl !== undefined) updateData.twitterUrl = data.twitterUrl;
+  if (data.bio !== undefined) updateData.bio = data.bio;
+  if (data.profilePictureUrl !== undefined) updateData.profilePictureUrl = data.profilePictureUrl;
+  if (data.bannerImageUrl !== undefined) updateData.bannerImageUrl = data.bannerImageUrl;
+  if (data.firstName !== undefined) updateData.firstName = data.firstName;
+  if (data.lastName !== undefined) updateData.lastName = data.lastName;
+
+  if (Object.keys(updateData).length === 0) {
+    return getUserProfile(userId);
+  }
+
+  await db.update(users).set(updateData).where(eq(users.id, userId));
+  return getUserProfile(userId);
+}
+
+/**
+ * Import user's LinkedIn profile data using BrightData
+ */
+export async function importUserLinkedInProfile(userId: number, linkedinUrl: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // First update the linkedinUrl
+  await db.update(users).set({ linkedinUrl }).where(eq(users.id, userId));
+
+  // Import profile using BrightData
+  const { fetchLinkedInProfile } = await import("./_core/brightdata");
+  const profileData = await fetchLinkedInProfile(linkedinUrl);
+
+  if (!profileData) {
+    throw new Error("Failed to fetch LinkedIn profile");
+  }
+
+  // Map LinkedIn data to user profile
+  const updateData: Record<string, unknown> = {
+    linkedinUrl,
+    lastImportedAt: new Date(),
+    importSource: 'brightdata',
+  };
+
+  if (profileData.name) updateData.name = profileData.name;
+  if (profileData.firstName) updateData.firstName = profileData.firstName;
+  if (profileData.lastName) updateData.lastName = profileData.lastName;
+  // Company: use currentCompanyName or currentCompany.name
+  const company = profileData.currentCompanyName || profileData.currentCompany?.name;
+  if (company) updateData.company = company;
+  // Job title: use position or headline
+  const jobTitle = profileData.position || profileData.headline;
+  if (jobTitle) updateData.jobTitle = jobTitle;
+  if (profileData.location) updateData.location = profileData.location;
+  if (profileData.summary) updateData.bio = profileData.summary;
+  if (profileData.profilePictureUrl) updateData.profilePictureUrl = profileData.profilePictureUrl;
+  if (profileData.bannerImage) updateData.bannerImageUrl = profileData.bannerImage;
+  if (profileData.followers) updateData.followers = profileData.followers;
+  if (profileData.connections) updateData.connections = profileData.connections;
+  if (profileData.experience) updateData.experience = JSON.stringify(profileData.experience);
+  if (profileData.education) updateData.education = JSON.stringify(profileData.education);
+  if (profileData.skills) updateData.skills = JSON.stringify(profileData.skills);
+  if (profileData.bioLinks) updateData.bioLinks = JSON.stringify(profileData.bioLinks);
+  if (profileData.posts) updateData.posts = JSON.stringify(profileData.posts);
+  if (profileData.activity) updateData.activity = JSON.stringify(profileData.activity);
+  if (profileData.linkedinId) updateData.linkedinId = profileData.linkedinId;
+  if (profileData.linkedinNumId) updateData.linkedinNumId = profileData.linkedinNumId;
+  if (profileData.city) updateData.city = profileData.city;
+  if (profileData.countryCode) updateData.countryCode = profileData.countryCode;
+
+  await db.update(users).set(updateData).where(eq(users.id, userId));
+
+  return getUserProfile(userId);
 }

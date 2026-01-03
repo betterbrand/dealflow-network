@@ -1,18 +1,25 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { 
-  createCompany, 
-  getCompanyById, 
-  getAllCompanies, 
+import {
+  createCompany,
+  getCompanyById,
+  getAllCompanies,
   getCompaniesWithStats,
   getCompanyWithContacts,
   updateCompany,
-  deleteCompany
+  deleteCompany,
+  getDb
 } from './db';
 
-describe('Companies Feature', () => {
+// Skip in CI or if no database URL - these are integration tests
+const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
+const hasDb = !!process.env.DATABASE_URL;
+
+describe.skipIf(isCI || !hasDb)('Companies Feature', () => {
   let testCompanyId: number;
 
   beforeAll(async () => {
+    const db = await getDb();
+    if (!db) return;
     // Create a test company
     testCompanyId = await createCompany({
       name: 'Test Company',

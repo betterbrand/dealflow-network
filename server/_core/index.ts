@@ -70,9 +70,45 @@ async function startServer() {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
-  server.listen(port, () => {
+  server.listen(port, async () => {
     console.log(`Server running on http://localhost:${port}/`);
+
+    // RDF store now uses lazy loading from database
+    // Triples are loaded on first SPARQL query, not on startup
+    // Set PRELOAD_RDF_STORE=true to preload for faster first query
+    if (process.env.PRELOAD_RDF_STORE === "true") {
+      try {
+        const { initializeRdfStoreFromDatabase } = await import("./sparql");
+        await initializeRdfStoreFromDatabase();
+      } catch (error) {
+        console.error("[Server] Failed to preload RDF store:", error);
+      }
+    } else {
+      console.log("[Server] RDF store will lazy-load from database on first query");
+    }
   });
+
+  // Graceful shutdown handling
+  const shutdown = async (signal: string) => {
+    console.log(`\n[Server] ${signal} received, shutting down gracefully...`);
+
+    server.close(() => {
+      console.log("[Server] HTTP server closed");
+    });
+
+    // Close database connection pool
+    try {
+      const { closePool } = await import("../db");
+      await closePool();
+    } catch (error) {
+      console.error("[Server] Error closing database pool:", error);
+    }
+
+    process.exit(0);
+  };
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
 startServer().catch(console.error);

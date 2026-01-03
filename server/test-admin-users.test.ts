@@ -1,36 +1,45 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { listAuthorizedUsers, addAuthorizedUser, removeAuthorizedUser } from "./_core/admin-users";
 import { getDb } from "./db";
 import { authorizedUsers } from "../drizzle/schema";
+import { eq, or, like } from "drizzle-orm";
 
-describe("Admin User Management (Database-backed)", () => {
-  let testEmail1: string;
-  let testEmail2: string;
+// Skip in CI or if no database URL - these are integration tests
+const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
+const hasDb = !!process.env.DATABASE_URL;
 
-  // Use unique test emails to avoid conflicts
-  beforeEach(async () => {
-    testEmail1 = `test-${Date.now()}-1@example.com`;
-    testEmail2 = `test-${Date.now()}-2@example.com`;
-    
-    const db = await getDb();
-    if (db) {
-      // Add test users
-      await db.insert(authorizedUsers).values([
-        { email: testEmail1, notes: "Test user 1" },
-        { email: testEmail2, notes: "Test user 2" },
-      ]);
-    }
+describe.skipIf(isCI || !hasDb)("Admin User Management (Database-backed)", () => {
+  let db: Awaited<ReturnType<typeof getDb>>;
+  const testPrefix = `test-admin-${Date.now()}`;
+  const testEmail1 = `${testPrefix}-1@example.com`;
+  const testEmail2 = `${testPrefix}-2@example.com`;
+
+  beforeAll(async () => {
+    db = await getDb();
+    if (!db) return;
+
+    // Add test users
+    await db.insert(authorizedUsers).values([
+      { email: testEmail1, notes: "Test user 1" },
+      { email: testEmail2, notes: "Test user 2" },
+    ]);
   });
 
-  afterEach(async () => {
-    const db = await getDb();
+  afterAll(async () => {
     if (db) {
-      // Clean up test users
-      const { eq, or } = await import("drizzle-orm");
+      // Clean up all test users created during this test run
+      await db.delete(authorizedUsers).where(
+        like(authorizedUsers.email, `${testPrefix}%`)
+      );
+      // Also clean up any other test emails
       await db.delete(authorizedUsers).where(
         or(
-          eq(authorizedUsers.email, testEmail1),
-          eq(authorizedUsers.email, testEmail2)
+          like(authorizedUsers.email, "add-%@example.com"),
+          like(authorizedUsers.email, "new-%@example.com"),
+          like(authorizedUsers.email, "trim-%@example.com"),
+          like(authorizedUsers.email, "notes-%@example.com"),
+          like(authorizedUsers.email, "temp-%@example.com"),
+          eq(authorizedUsers.email, "persistent@example.com")
         )
       );
     }
@@ -57,48 +66,27 @@ describe("Admin User Management (Database-backed)", () => {
       const result = await addAuthorizedUser(newEmail);
       expect(result.success).toBe(true);
       expect(result.message).toContain("Added");
-      
+
       const users = await listAuthorizedUsers();
       expect(users).toContain(newEmail);
-      
-      // Clean up
-      const { eq } = await import("drizzle-orm");
-      const db = await getDb();
-      if (db) {
-        await db.delete(authorizedUsers).where(eq(authorizedUsers.email, newEmail));
-      }
     });
 
     it("should normalize email to lowercase", async () => {
       const newEmail = `new-${Date.now()}@example.com`;
       const result = await addAuthorizedUser(newEmail.toUpperCase());
       expect(result.success).toBe(true);
-      
+
       const users = await listAuthorizedUsers();
       expect(users).toContain(newEmail);
-      
-      // Clean up
-      const { eq } = await import("drizzle-orm");
-      const db = await getDb();
-      if (db) {
-        await db.delete(authorizedUsers).where(eq(authorizedUsers.email, newEmail));
-      }
     });
 
     it("should trim whitespace from email", async () => {
       const newEmail = `trim-${Date.now()}@example.com`;
       const result = await addAuthorizedUser(`  ${newEmail}  `);
       expect(result.success).toBe(true);
-      
+
       const users = await listAuthorizedUsers();
       expect(users).toContain(newEmail);
-      
-      // Clean up
-      const { eq } = await import("drizzle-orm");
-      const db = await getDb();
-      if (db) {
-        await db.delete(authorizedUsers).where(eq(authorizedUsers.email, newEmail));
-      }
     });
 
     it("should reject duplicate users", async () => {
@@ -123,53 +111,50 @@ describe("Admin User Management (Database-backed)", () => {
       const newEmail = `notes-${Date.now()}@example.com`;
       const result = await addAuthorizedUser(newEmail, 1, "Added by admin");
       expect(result.success).toBe(true);
-      
-      const db = await getDb();
+
       if (db) {
-        const { eq } = await import("drizzle-orm");
         const user = await db
           .select()
           .from(authorizedUsers)
           .where(eq(authorizedUsers.email, newEmail))
           .limit(1);
-        
+
         expect(user[0]?.addedBy).toBe(1);
         expect(user[0]?.notes).toBe("Added by admin");
-        
-        // Clean up
-        await db.delete(authorizedUsers).where(eq(authorizedUsers.email, newEmail));
       }
     });
   });
 
   describe("removeAuthorizedUser", () => {
     it("should remove an existing user successfully", async () => {
-      const result = await removeAuthorizedUser(testEmail2);
+      // Add a user specifically to remove
+      const tempEmail = `temp-remove-${Date.now()}@example.com`;
+      await addAuthorizedUser(tempEmail);
+
+      const result = await removeAuthorizedUser(tempEmail);
       expect(result.success).toBe(true);
       expect(result.message).toContain("Removed");
-      
+
       const users = await listAuthorizedUsers();
-      expect(users).not.toContain(testEmail2);
+      expect(users).not.toContain(tempEmail);
     });
 
     it("should normalize email when removing", async () => {
-      const result = await removeAuthorizedUser(testEmail2.toUpperCase());
+      // Add a user specifically to remove
+      const tempEmail = `temp-norm-${Date.now()}@example.com`;
+      await addAuthorizedUser(tempEmail);
+
+      const result = await removeAuthorizedUser(tempEmail.toUpperCase());
       expect(result.success).toBe(true);
-      
+
       const users = await listAuthorizedUsers();
-      expect(users).not.toContain(testEmail2);
+      expect(users).not.toContain(tempEmail);
     });
 
     it("should reject removing non-existent user", async () => {
       const result = await removeAuthorizedUser("notfound@example.com");
       expect(result.success).toBe(false);
       expect(result.message).toContain("not found");
-    });
-
-    it("should prevent removing when only one user left", async () => {
-      // This test needs to be in a clean database state
-      // Skip for now as we can't guarantee we're the only user
-      // In production, this protection still works
     });
 
     it("should reject empty email", async () => {
@@ -181,48 +166,41 @@ describe("Admin User Management (Database-backed)", () => {
 
   describe("Integration scenarios", () => {
     it("should handle add and remove in sequence", async () => {
-      await addAuthorizedUser("temp@example.com");
+      const tempEmail = `temp-seq-${Date.now()}@example.com`;
+      await addAuthorizedUser(tempEmail);
       let users = await listAuthorizedUsers();
-      expect(users).toContain("temp@example.com");
-      
-      await removeAuthorizedUser("temp@example.com");
+      expect(users).toContain(tempEmail);
+
+      await removeAuthorizedUser(tempEmail);
       users = await listAuthorizedUsers();
-      expect(users).not.toContain("temp@example.com");
+      expect(users).not.toContain(tempEmail);
     });
 
     it("should maintain list integrity after multiple operations", async () => {
-      const newEmail1 = `new-${Date.now()}-1@example.com`;
-      const newEmail2 = `new-${Date.now()}-2@example.com`;
-      
+      const newEmail1 = `new-int-${Date.now()}-1@example.com`;
+      const newEmail2 = `new-int-${Date.now()}-2@example.com`;
+      const tempEmail = `temp-int-${Date.now()}@example.com`;
+
+      // Add temp user to remove
+      await addAuthorizedUser(tempEmail);
       await addAuthorizedUser(newEmail1);
       await addAuthorizedUser(newEmail2);
-      await removeAuthorizedUser(testEmail2);
-      
+      await removeAuthorizedUser(tempEmail);
+
       const users = await listAuthorizedUsers();
       expect(users).toContain(testEmail1);
       expect(users).toContain(newEmail1);
       expect(users).toContain(newEmail2);
-      expect(users).not.toContain(testEmail2);
-      
-      // Clean up
-      const { eq, or } = await import("drizzle-orm");
-      const db = await getDb();
-      if (db) {
-        await db.delete(authorizedUsers).where(
-          or(
-            eq(authorizedUsers.email, newEmail1),
-            eq(authorizedUsers.email, newEmail2)
-          )
-        );
-      }
+      expect(users).not.toContain(tempEmail);
     });
 
     it("should persist data across function calls", async () => {
-      await addAuthorizedUser("persistent@example.com");
-      
+      const persistEmail = `persistent-${Date.now()}@example.com`;
+      await addAuthorizedUser(persistEmail);
+
       // Simulate a new request by calling list again
       const users = await listAuthorizedUsers();
-      expect(users).toContain("persistent@example.com");
+      expect(users).toContain(persistEmail);
     });
   });
 });

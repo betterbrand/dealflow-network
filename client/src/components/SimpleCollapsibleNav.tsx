@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { APP_LOGO, APP_TITLE } from "@/const";
 import {
   Building2, LayoutDashboard, LogOut, Network, PanelLeft,
@@ -78,18 +79,23 @@ export function SimpleCollapsibleNav() {
       </div>
 
       {/* User Menu */}
-      <div className="border-t p-3">
-        <div className={cn(
-          "flex items-center gap-3 px-1 py-1 rounded-md",
-          isCollapsed && "flex-col gap-2"
-        )}>
+      <div className="border-t p-3 space-y-2">
+        <button
+          onClick={() => setLocation("/profile")}
+          className={cn(
+            "flex items-center gap-3 px-1 py-1 rounded-md w-full hover:bg-sidebar-accent transition-colors",
+            isCollapsed && "flex-col gap-2",
+            location === "/profile" && "bg-sidebar-accent"
+          )}
+          title={isCollapsed ? "My Profile" : undefined}
+        >
           <Avatar className="h-9 w-9 border shrink-0">
             <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
               {user?.name?.charAt(0).toUpperCase()}
             </AvatarFallback>
           </Avatar>
           {!isCollapsed && (
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 text-left">
               <p className="text-sm font-medium truncate leading-none">
                 {user?.name || "-"}
               </p>
@@ -98,11 +104,16 @@ export function SimpleCollapsibleNav() {
               </p>
             </div>
           )}
-        </div>
+        </button>
+
+        {/* Theme Toggle */}
+        <ThemeToggle collapsed={isCollapsed} />
+
+        {/* Logout */}
         {!isCollapsed && (
           <button
             onClick={logout}
-            className="mt-2 flex w-full items-center gap-2 px-2 py-1.5 text-sm rounded-sm"
+            className="flex w-full items-center gap-2 px-2 py-1.5 text-sm rounded-sm hover:bg-sidebar-accent"
           >
             <LogOut className="h-4 w-4" />
             <span>Sign out</span>
@@ -111,7 +122,7 @@ export function SimpleCollapsibleNav() {
         {isCollapsed && (
           <button
             onClick={logout}
-            className="mt-2 w-full flex justify-center p-2"
+            className="w-full flex justify-center p-2 hover:bg-sidebar-accent rounded-md"
             title="Sign out"
           >
             <LogOut className="h-4 w-4" />

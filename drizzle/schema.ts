@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { index, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -17,6 +17,55 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+
+  // === Profile Fields (mirrors contacts table) ===
+  phone: varchar("phone", { length: 50 }),
+  telegramUsername: varchar("telegramUsername", { length: 255 }),
+
+  // Professional info
+  company: varchar("company", { length: 255 }),
+  jobTitle: varchar("jobTitle", { length: 255 }),
+  location: varchar("location", { length: 255 }),
+
+  // Social links
+  linkedinUrl: varchar("linkedinUrl", { length: 500 }),
+  twitterUrl: varchar("twitterUrl", { length: 500 }),
+
+  // Profile content
+  bio: text("bio"), // User's bio/summary
+  profilePictureUrl: text("profilePictureUrl"),
+  bannerImageUrl: text("bannerImageUrl"),
+
+  // Parsed name
+  firstName: varchar("firstName", { length: 100 }),
+  lastName: varchar("lastName", { length: 100 }),
+
+  // Imported data from LinkedIn/Twitter
+  experience: text("experience"), // JSON array
+  education: text("education"), // JSON array
+  skills: text("skills"), // JSON array
+
+  // Social proof
+  followers: int("followers"),
+  connections: int("connections"),
+
+  // External links
+  bioLinks: text("bioLinks"), // JSON array: [{title, link}]
+
+  // Recent activity
+  posts: text("posts"), // JSON array of recent posts
+  activity: text("activity"), // JSON array of recent activity
+
+  // LinkedIn metadata
+  linkedinId: varchar("linkedinId", { length: 100 }),
+  linkedinNumId: varchar("linkedinNumId", { length: 100 }),
+  city: varchar("city", { length: 255 }),
+  countryCode: varchar("countryCode", { length: 10 }),
+
+  // Import tracking
+  lastImportedAt: timestamp("lastImportedAt"),
+  importSource: varchar("importSource", { length: 50 }),
+
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -43,7 +92,7 @@ export const contacts = mysqlTable("contacts", {
   role: varchar("role", { length: 255 }),
   location: varchar("location", { length: 255 }),
   
-  // Enriched data from LinkedIn/Twitter (shared)
+  // Imported data from LinkedIn/Twitter (shared)
   twitterUrl: varchar("twitterUrl", { length: 500 }),
   summary: text("summary"),
   profilePictureUrl: text("profilePictureUrl"),
@@ -51,7 +100,46 @@ export const contacts = mysqlTable("contacts", {
   experience: text("experience"), // JSON array
   education: text("education"), // JSON array
   skills: text("skills"), // JSON array
-  
+
+  // === STEP 1: Social Proof & Reach ===
+  followers: int("followers"), // LinkedIn follower count
+  connections: int("connections"), // LinkedIn connection count
+
+  // === STEP 2: Visual Assets ===
+  bannerImageUrl: text("bannerImageUrl"), // Profile banner image
+  // Note: company/school logos stored in experience/education JSON arrays
+
+  // === STEP 3: Name Parsing ===
+  firstName: varchar("firstName", { length: 100 }),
+  lastName: varchar("lastName", { length: 100 }),
+
+  // === STEP 4: External Links ===
+  bioLinks: text("bioLinks"), // JSON array: [{title, link}]
+
+  // === STEP 5: Recent Activity & Content ===
+  posts: text("posts"), // JSON array of recent LinkedIn posts
+  activity: text("activity"), // JSON array of recent activity
+
+  // === STEP 6: Network Expansion ===
+  peopleAlsoViewed: text("peopleAlsoViewed"), // JSON array of similar profiles
+
+  // === Additional LinkedIn Metadata ===
+  linkedinId: varchar("linkedinId", { length: 100 }), // LinkedIn profile ID
+  linkedinNumId: varchar("linkedinNumId", { length: 100 }), // Numeric LinkedIn ID
+  city: varchar("city", { length: 255 }), // Granular city (parsed from location)
+  countryCode: varchar("countryCode", { length: 10 }), // ISO country code
+  memorializedAccount: int("memorializedAccount").default(0), // Boolean: is memorial account
+  educationDetails: text("educationDetails"), // Free-text education summary
+  honorsAndAwards: text("honorsAndAwards"), // JSON object of awards
+
+  // === Import Metadata ===
+  lastImportedAt: timestamp("lastImportedAt"), // When profile was last imported
+  importSource: varchar("importSource", { length: 50 }), // "brightdata", "scrapingdog", "manual", etc.
+  importStatus: varchar("importStatus", { length: 50 }), // "pending", "complete", "failed", null
+
+  // === Opportunity ===
+  opportunity: text("opportunity"), // Why this contact matters - deal/opportunity context
+
   // Metadata
   companyId: int("companyId").references(() => companies.id),
   createdBy: int("createdBy").notNull().references(() => users.id), // Who first created this contact
@@ -184,7 +272,7 @@ export const socialProfiles = mysqlTable("socialProfiles", {
   platform: varchar("platform", { length: 50 }).notNull(),
   url: varchar("url", { length: 500 }).notNull(),
   profileData: text("profileData"),
-  lastEnriched: timestamp("lastEnriched"),
+  lastImported: timestamp("lastImported"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -208,6 +296,28 @@ export const contactRelationships = mysqlTable("contactRelationships", {
 
 export type ContactRelationship = typeof contactRelationships.$inferSelect;
 export type InsertContactRelationship = typeof contactRelationships.$inferInsert;
+
+/**
+ * Inferred edges table - stores computed connections between contacts
+ * Edges are inferred from LinkedIn data (peopleAlsoViewed) and shared attributes
+ * Used for user-centric network graph visualization
+ */
+export const inferredEdges = mysqlTable("inferredEdges", {
+  id: int("id").autoincrement().primaryKey(),
+  fromContactId: int("fromContactId").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  toContactId: int("toContactId").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  edgeType: varchar("edgeType", { length: 50 }).notNull(), // 'people_also_viewed', 'same_company', 'same_school', 'shared_skills'
+  strength: int("strength").default(1), // Number of matching attributes
+  metadata: text("metadata"), // JSON with match details
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  fromIdx: index("idx_inferred_from").on(table.fromContactId),
+  toIdx: index("idx_inferred_to").on(table.toContactId),
+  typeIdx: index("idx_inferred_type").on(table.edgeType),
+}));
+
+export type InferredEdge = typeof inferredEdges.$inferSelect;
+export type InsertInferredEdge = typeof inferredEdges.$inferInsert;
 
 /**
  * Contact photos table - stores multiple photos per contact
@@ -253,3 +363,134 @@ export const authorizedUsers = mysqlTable("authorizedUsers", {
 
 export type AuthorizedUser = typeof authorizedUsers.$inferSelect;
 export type InsertAuthorizedUser = typeof authorizedUsers.$inferInsert;
+
+/**
+ * RDF Triples table - persistent storage for semantic graph data
+ * Stores subject-predicate-object triples derived from LinkedIn profiles
+ * Used for SPARQL-like queries and semantic relationship traversal
+ */
+export const rdfTriples = mysqlTable("rdfTriples", {
+  id: int("id").autoincrement().primaryKey(),
+
+  // Triple components (subject-predicate-object)
+  subject: varchar("subject", { length: 512 }).notNull(),    // e.g., "linkedin:satyanadella"
+  predicate: varchar("predicate", { length: 512 }).notNull(), // e.g., "https://schema.org/name"
+  object: text("object").notNull(),                           // e.g., "Satya Nadella" or "org:microsoft"
+  objectType: varchar("objectType", { length: 20 }).notNull(), // "literal" | "uri"
+
+  // Source tracking - which contact this triple belongs to
+  contactId: int("contactId").references(() => contacts.id, { onDelete: "cascade" }),
+
+  // Metadata
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  // Indexes for fast queries
+  subjectIdx: index("idx_rdf_subject").on(table.subject),
+  predicateIdx: index("idx_rdf_predicate").on(table.predicate),
+  contactIdx: index("idx_rdf_contact").on(table.contactId),
+}));
+
+export type RdfTriple = typeof rdfTriples.$inferSelect;
+export type InsertRdfTriple = typeof rdfTriples.$inferInsert;
+
+/**
+ * Agent Sessions table - tracks autonomous agent runs
+ * Sessions can be background scans or conversational interactions
+ */
+export const agentSessions = mysqlTable("agentSessions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+
+  // Session type and goal
+  sessionType: varchar("sessionType", { length: 50 }).notNull(), // "background_scan", "conversational"
+  goal: text("goal"), // Natural language goal or query
+
+  // State management
+  status: varchar("status", { length: 20 }).default("running"), // "running", "paused", "completed", "failed"
+  stateJson: text("stateJson"), // Serialized agent state (explored nodes, pending, etc.)
+
+  // Progress tracking
+  findingsCount: int("findingsCount").default(0),
+
+  // Timing
+  startedAt: timestamp("startedAt").defaultNow(),
+  pausedAt: timestamp("pausedAt"),
+  completedAt: timestamp("completedAt"),
+  lastActivityAt: timestamp("lastActivityAt").defaultNow(),
+
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index("idx_agent_session_user").on(table.userId),
+  statusIdx: index("idx_agent_session_status").on(table.status),
+}));
+
+export type AgentSession = typeof agentSessions.$inferSelect;
+export type InsertAgentSession = typeof agentSessions.$inferInsert;
+
+/**
+ * Agent Findings table - stores discovered connections and insights
+ * Each finding represents a potential relationship or introduction path
+ */
+export const agentFindings = mysqlTable("agentFindings", {
+  id: int("id").autoincrement().primaryKey(),
+  sessionId: int("sessionId").notNull().references(() => agentSessions.id, { onDelete: "cascade" }),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+
+  // Finding type
+  findingType: varchar("findingType", { length: 50 }).notNull(), // "connection", "introduction_path", "insight"
+
+  // Connection findings
+  fromContactId: int("fromContactId").references(() => contacts.id, { onDelete: "cascade" }),
+  toContactId: int("toContactId").references(() => contacts.id, { onDelete: "cascade" }),
+
+  // Details
+  inferenceMethod: varchar("inferenceMethod", { length: 50 }), // "mutual_connection", "llm_reasoning", "career_overlap"
+  confidence: int("confidence").notNull(), // 0-100 scale
+  reasoning: text("reasoning").notNull(),
+  evidenceJson: text("evidenceJson"), // Supporting evidence
+
+  // For path findings
+  pathJson: text("pathJson"), // JSON array of contact IDs in path
+  pathLength: int("pathLength"),
+
+  // User interaction
+  status: varchar("status", { length: 20 }).default("pending"), // "pending", "confirmed", "dismissed"
+  reviewedAt: timestamp("reviewedAt"),
+
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index("idx_agent_finding_user").on(table.userId),
+  sessionIdx: index("idx_agent_finding_session").on(table.sessionId),
+  statusIdx: index("idx_agent_finding_status").on(table.status),
+}));
+
+export type AgentFinding = typeof agentFindings.$inferSelect;
+export type InsertAgentFinding = typeof agentFindings.$inferInsert;
+
+/**
+ * Agent Conversations table - stores chat history with humanization metadata
+ * Tracks sentiment, tone, and reasoning for each message
+ */
+export const agentConversations = mysqlTable("agentConversations", {
+  id: int("id").autoincrement().primaryKey(),
+  sessionId: int("sessionId").notNull().references(() => agentSessions.id, { onDelete: "cascade" }),
+
+  // Message content
+  role: varchar("role", { length: 20 }).notNull(), // "user", "agent"
+  content: text("content").notNull(),
+
+  // Humanization metadata
+  sentiment: varchar("sentiment", { length: 20 }), // Detected user sentiment: "neutral", "positive", "frustrated", "confused", "urgent"
+  tone: varchar("tone", { length: 20 }), // Agent tone used: "neutral", "empathetic", "excited", "curious", "cautious"
+  intentType: varchar("intentType", { length: 50 }), // Parsed intent type
+
+  // Transparency
+  reasoningTrace: text("reasoningTrace"), // Agent's internal reasoning (for debugging/transparency)
+
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  sessionIdx: index("idx_agent_conv_session").on(table.sessionId),
+}));
+
+export type AgentConversation = typeof agentConversations.$inferSelect;
+export type InsertAgentConversation = typeof agentConversations.$inferInsert;

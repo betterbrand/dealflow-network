@@ -109,3 +109,13 @@ temp/
 *.sqlite3
 .vercel
 .env*.local
+.aider*
+
+# Playwright test artifacts
+test-results/
+playwright-report/
+.playwright-mcp/
+playwright/.cache/
+
+# Claude Code local settings
+.claude/settings.local.json

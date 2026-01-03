@@ -4,12 +4,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useState } from "react";
 import { CreateContactDialog } from "@/components/CreateContactDialogNew";
 
 export default function Contacts() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [, setLocation] = useLocation();
   const { data: contacts, isLoading } = trpc.contacts.list.useQuery();
 
   const filteredContacts = contacts?.filter((item) => {
@@ -70,6 +71,8 @@ export default function Contacts() {
                     <TableHead>Name</TableHead>
                     <TableHead>Company</TableHead>
                     <TableHead>Role</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Network</TableHead>
                     <TableHead>Event</TableHead>
                     <TableHead>Added</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -77,12 +80,43 @@ export default function Contacts() {
                 </TableHeader>
                 <TableBody>
                   {filteredContacts?.map((item) => (
-                    <TableRow key={item.contact.id}>
+                    <TableRow
+                      key={item.contact.id}
+                      onClick={() => setLocation(`/contacts/${item.contact.id}`)}
+                      className="cursor-pointer hover:bg-muted/50 transition-colors"
+                    >
                       <TableCell className="font-medium">
-                        {item.contact.name}
+                        <div className="flex items-center gap-2">
+                          {item.contact.profilePictureUrl && (
+                            <img
+                              src={item.contact.profilePictureUrl}
+                              alt={item.contact.name}
+                              className="w-8 h-8 rounded-full object-cover"
+                            />
+                          )}
+                          <span>{item.contact.name}</span>
+                        </div>
                       </TableCell>
                       <TableCell>{item.contact.company || "-"}</TableCell>
                       <TableCell>{item.contact.role || "-"}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {item.contact.city && item.contact.countryCode
+                          ? `${item.contact.city}, ${item.contact.countryCode}`
+                          : item.contact.city || item.contact.location || "-"}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {item.contact.followers ? (
+                          <span className="text-muted-foreground">
+                            {item.contact.followers.toLocaleString()} followers
+                          </span>
+                        ) : item.contact.connections ? (
+                          <span className="text-muted-foreground">
+                            {item.contact.connections.toLocaleString()} connections
+                          </span>
+                        ) : (
+                          "-"
+                        )}
+                      </TableCell>
                       <TableCell>{(item as any).event?.name || "-"}</TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {new Date(item.contact.createdAt).toLocaleDateString()}

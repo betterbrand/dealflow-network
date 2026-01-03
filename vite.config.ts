@@ -36,11 +36,17 @@ export default defineConfig({
       "localhost",
       "127.0.0.1",
     ],
-    hmr: {
-      protocol: "wss",
-      host: process.env.VITE_HMR_HOST,
-      clientPort: 443,
-    },
+    // Only use custom HMR config for cloud deployments (when VITE_HMR_HOST is set)
+    // For local dev, let Vite use default HMR (ws:// on same port as dev server)
+    ...(process.env.VITE_HMR_HOST
+      ? {
+          hmr: {
+            protocol: "wss",
+            host: process.env.VITE_HMR_HOST,
+            clientPort: 443,
+          },
+        }
+      : {}),
     fs: {
       strict: true,
       deny: ["**/.*"],
