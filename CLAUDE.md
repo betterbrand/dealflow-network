@@ -309,6 +309,45 @@ Session cookie name defined in `shared/const.ts` (shared constant).
 
 ## Testing
 
+### Unit Tests
+
 Vitest for unit tests. Test files: `server/test-*.test.ts`
 
 Run tests: `npm run test`
+
+### Magic Link Authentication (Development)
+
+When testing magic link authentication in development (e.g., with Playwright):
+
+**Email Address**: Use `test@example.com` (whitelisted test account)
+
+**Finding the Magic Link**:
+1. Enter the email address on the login page
+2. Check Docker logs for the magic link URL:
+   ```bash
+   docker-compose logs -f app
+   ```
+
+**Example Log Output**:
+```
+  ⎿ MAGIC LINK EMAIL (Development Mode)
+    =====================================================================
+    ===========
+    To: test@example.com
+    Subject: Your Magic Link to DealFlow Network
+
+    Click this link to sign in:
+
+      http://localhost:3000/api/auth/magic-link/verify?token=eyJhbGciOiJI
+    UzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJ0eXBl
+    IjoibWFnaWMtbGluayIsImlhdCI6MTc2NzQ2ODI1MCwiZXhwIjoxNzY3NDY5MTUwfQ...
+
+    This link expires in 15 minutes.
+    =====================================================================
+    ===========
+```
+
+**Playwright Workflow**:
+1. Playwright enters `test@example.com` in login form
+2. Extracts magic link URL from Docker logs
+3. Navigates to the magic link to complete authentication
