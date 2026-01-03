@@ -649,16 +649,111 @@ export const appRouter = router({
           edgesByType: Record<string, number>;
         };
       }> => {
-        // Stub - db-graph module exists on main but not on this branch
-        // Return empty graph for now
+        const { getAllContacts } = await import("./db");
+        const { contactRelationships, inferredEdges } = await import("../drizzle/schema");
+        const { getDb } = await import("./db");
+        const { inArray, or } = await import("drizzle-orm");
+
+        // Get all contacts for the user
+        const allContactsData = await getAllContacts(ctx.user.id);
+        const contacts = allContactsData.map(c => c.contact);
+
+        // Create user node
+        const userNode = {
+          id: ctx.user.id,
+          name: ctx.user.name || ctx.user.email.split('@')[0],
+          degree: 0,
+          isUser: true,
+          followers: 0,
+          connections: contacts.length,
+        };
+
+        // Create contact nodes (degree 1 - direct contacts)
+        const contactNodes = contacts.map(c => ({
+          id: c.id,
+          name: c.name,
+          company: c.company || undefined,
+          role: c.role || undefined,
+          degree: 1,
+          isUser: false,
+          followers: 0,
+          connections: 0,
+          profilePictureUrl: c.profilePictureUrl || undefined,
+        }));
+
+        const allNodes = [userNode, ...contactNodes];
+
+        // Get relationships between user's contacts
+        const db = await getDb();
+        const contactIds = contacts.map(c => c.id);
+        const relationships = db ? await db
+          .select()
+          .from(contactRelationships)
+          .where(
+            or(
+              inArray(contactRelationships.fromContactId, contactIds),
+              inArray(contactRelationships.toContactId, contactIds)
+            )
+          ) : [];
+
+        // Filter to only relationships between contacts the user has access to
+        const userContactIds = new Set(contactIds);
+        const filteredRelationships = relationships.filter((rel: any) =>
+          userContactIds.has(rel.fromContactId) && userContactIds.has(rel.toContactId)
+        );
+
+        // Create edges
+        const edges: Array<{
+          from: number;
+          to: number;
+          source: number;
+          target: number;
+          relationshipType?: string;
+          edgeType?: string;
+          strength?: number;
+        }> = [];
+
+        // Add edges from user to all direct contacts
+        contactIds.forEach(contactId => {
+          edges.push({
+            from: ctx.user.id,
+            to: contactId,
+            source: ctx.user.id,
+            target: contactId,
+            edgeType: 'direct_contact',
+            relationshipType: 'direct_contact',
+            strength: 1,
+          });
+        });
+
+        // Add edges between contacts
+        filteredRelationships.forEach((rel: any) => {
+          edges.push({
+            from: rel.fromContactId,
+            to: rel.toContactId,
+            source: rel.fromContactId,
+            target: rel.toContactId,
+            edgeType: 'relationship',
+            relationshipType: rel.relationshipType,
+            strength: rel.strength || 1,
+          });
+        });
+
+        // Calculate edge type stats
+        const edgesByType: Record<string, number> = {};
+        edges.forEach(edge => {
+          const type = edge.edgeType || 'unknown';
+          edgesByType[type] = (edgesByType[type] || 0) + 1;
+        });
+
         return {
-          nodes: [],
-          edges: [],
+          nodes: allNodes,
+          edges,
           stats: {
-            totalNodes: 0,
-            totalEdges: 0,
-            maxDepth: input?.maxDepth || 3,
-            edgesByType: {},
+            totalNodes: allNodes.length,
+            totalEdges: edges.length,
+            maxDepth: 1, // Currently only showing direct contacts
+            edgesByType,
           },
         };
       }),
@@ -781,14 +876,22 @@ export const appRouter = router({
       const { getAllContacts } = await import("./db");
       const { contactRelationships } = await import("../drizzle/schema");
       const { getDb } = await import("./db");
-      
+
       // Get all contacts for the user
       const contacts = await getAllContacts(ctx.user.id);
-      
+
+      // Create a set of contact IDs the user has access to
+      const userContactIds = new Set(contacts.map(c => c.contact.id));
+
       // Get all relationships
       const db = await getDb();
       const relationships = db ? await db.select().from(contactRelationships) : [];
-      
+
+      // Filter relationships to only include edges between contacts the user has access to
+      const filteredRelationships = relationships.filter((rel: any) =>
+        userContactIds.has(rel.fromContactId) && userContactIds.has(rel.toContactId)
+      );
+
       // Transform to graph format
       const nodes = contacts.map(c => ({
         id: c.contact.id,
@@ -796,13 +899,13 @@ export const appRouter = router({
         company: c.contact.company || undefined,
         role: c.contact.role || undefined,
       }));
-      
-      const links = relationships.map((rel: any) => ({
+
+      const links = filteredRelationships.map((rel: any) => ({
         source: rel.fromContactId,
         target: rel.toContactId,
         relationshipType: rel.relationshipType || undefined,
       }));
-      
+
       return { nodes, links };
     }),
   }),
