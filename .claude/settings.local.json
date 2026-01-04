@@ -23,7 +23,9 @@
       "mcp__playwright__browser_close",
       "Bash(tail:*)",
       "Bash(git checkout:*)",
-      "Bash(git diff:*)"
+      "Bash(git diff:*)",
+      "mcp__playwright__browser_console_messages",
+      "Bash(npm run check:*)"
     ]
   }
 }
