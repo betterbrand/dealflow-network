@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { NotificationBell } from "@/components/NotificationBell";
 import { APP_LOGO, APP_TITLE } from "@/const";
 import {
   Building2, LayoutDashboard, LogOut, Network, PanelLeft,
@@ -43,15 +44,15 @@ export function SimpleCollapsibleNav() {
         {isCollapsed && (
           <img src={APP_LOGO} className="h-8 w-8 mx-auto rounded-md object-cover ring-1 ring-border" alt="Logo" />
         )}
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className={cn(
-            "h-8 w-8 flex items-center justify-center rounded-lg",
-            isCollapsed && "mx-auto mt-2"
-          )}
-        >
-          <PanelLeft className="h-4 w-4 text-muted-foreground" />
-        </button>
+        <div className={cn("flex items-center gap-1", isCollapsed && "mx-auto mt-2")}>
+          <NotificationBell collapsed={isCollapsed} />
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="h-8 w-8 flex items-center justify-center rounded-lg"
+          >
+            <PanelLeft className="h-4 w-4 text-muted-foreground" />
+          </button>
+        </div>
       </div>
 
       {/* Menu Items */}

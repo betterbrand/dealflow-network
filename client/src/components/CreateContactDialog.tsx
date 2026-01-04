@@ -12,9 +12,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Plus, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Plus, Loader2, CheckCircle2, AlertCircle, Lock } from "lucide-react";
 
 type ImportStep = "import" | "review";
 
@@ -34,6 +35,7 @@ export function CreateContactDialog() {
     linkedinUrl: "",
     twitterUrl: "",
     notes: "",
+    isPrivate: false,
   });
 
   const utils = trpc.useUtils();
@@ -65,6 +67,7 @@ export function CreateContactDialog() {
       linkedinUrl: "",
       twitterUrl: "",
       notes: "",
+      isPrivate: false,
     });
   };
 
@@ -109,6 +112,7 @@ export function CreateContactDialog() {
           linkedinUrl: profileUrl,
           twitterUrl: "",
           notes: enriched.summary || "",
+          isPrivate: false,
         });
 
         toast.success("Profile imported successfully!");
@@ -119,6 +123,7 @@ export function CreateContactDialog() {
         setFormData({
           ...formData,
           twitterUrl: profileUrl,
+          isPrivate: false,
         });
         toast.info("X/Twitter enrichment coming soon. Please fill in the details manually.");
         setStep("review");
@@ -159,6 +164,7 @@ export function CreateContactDialog() {
       linkedinUrl: formData.linkedinUrl || undefined,
       twitterUrl: formData.twitterUrl || undefined,
       notes: formData.notes || undefined,
+      isPrivate: formData.isPrivate,
     });
   };
 
@@ -404,6 +410,26 @@ export function CreateContactDialog() {
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   placeholder="Additional notes about this contact..."
                   rows={3}
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border p-4 bg-muted/30">
+                <div className="flex items-start gap-3">
+                  <Lock className="h-5 w-5 text-muted-foreground mt-0.5" />
+                  <div className="flex-1">
+                    <Label htmlFor="isPrivate" className="text-sm font-medium cursor-pointer">
+                      Private Contact
+                    </Label>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      Require approval before others can view this contact
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  id="isPrivate"
+                  checked={formData.isPrivate}
+                  onCheckedChange={(checked) => setFormData({ ...formData, isPrivate: checked })}
+                  aria-label="Make contact private"
                 />
               </div>
             </div>
