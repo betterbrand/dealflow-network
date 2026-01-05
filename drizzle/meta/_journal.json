@@ -50,6 +50,27 @@
       "when": 1765151687923,
       "tag": "0006_curved_mandarin",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1767565200000,
+      "tag": "0007_stiff_madame_masque",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1767565201000,
+      "tag": "0008_add_import_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1767565202000,
+      "tag": "0009_replace_access_requests_schema",
+      "breakpoints": true
     }
   ]
 }
