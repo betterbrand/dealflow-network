@@ -92,7 +92,24 @@ export const appRouter = router({
         const { getUserContact } = await import("./db-collaborative");
         return await getUserContact(ctx.user.id, input.id);
       }),
-    
+
+    getMetadata: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const { getContactMetadata } = await import("./db-collaborative");
+        const { getContactAccessStatus } = await import("./access-control");
+
+        const metadata = await getContactMetadata(input.id);
+        if (!metadata) return null;
+
+        const accessStatus = await getContactAccessStatus(ctx.user.id, input.id);
+
+        return {
+          ...metadata,
+          accessStatus,
+        };
+      }),
+
     search: protectedProcedure
       .input(z.object({ query: z.string() }))
       .query(async ({ input }) => {

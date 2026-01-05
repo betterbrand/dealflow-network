@@ -17,6 +17,7 @@ import { ScreenshotUploadInput } from "./import/ScreenshotUploadInput";
 import { MultipleUrlsInput } from "./import/MultipleUrlsInput";
 import { FileUploadInput } from "./import/FileUploadInput";
 import { CsvUploadInput } from "./import/CsvUploadInput";
+import { ManualEntryInput } from "./import/ManualEntryInput";
 import { BulkContactReview } from "./import/BulkContactReview";
 import type { ExtractedContact } from "../../../server/morpheus";
 
@@ -40,16 +41,6 @@ export function CreateContactDialog() {
 
   const handleMethodSelect = (method: ImportMethod) => {
     setSelectedMethod(method);
-
-    // For manual entry, we'll reuse the old form for now
-    if (method === "manual") {
-      toast.info("Manual entry: Using existing form (will be updated in next iteration)");
-      // For now, just reset - manual entry will use the old CreateContactDialog
-      resetDialog();
-      setOpen(false);
-      return;
-    }
-
     setStep("input");
   };
 
@@ -115,6 +106,11 @@ export function CreateContactDialog() {
               title: "CSV Import",
               description: "Upload a CSV file with contact details",
             };
+          case "manual":
+            return {
+              title: "Manual Entry",
+              description: "Manually enter contact details",
+            };
           default:
             return {
               title: "Import Contacts",
@@ -166,6 +162,13 @@ export function CreateContactDialog() {
             return (
               <CsvUploadInput
                 onParsed={handleContactsExtracted}
+                onCancel={handleCancel}
+              />
+            );
+          case "manual":
+            return (
+              <ManualEntryInput
+                onSubmit={handleContactsExtracted}
                 onCancel={handleCancel}
               />
             );

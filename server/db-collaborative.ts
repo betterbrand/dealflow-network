@@ -315,6 +315,28 @@ export async function getUserContact(userId: number, contactId: number) {
 }
 
 /**
+ * Get basic contact metadata (for access-restricted contacts)
+ * Returns minimal info even if user doesn't have access
+ */
+export async function getContactMetadata(contactId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db
+    .select({
+      id: contacts.id,
+      name: contacts.name,
+      isPrivate: contacts.isPrivate,
+      createdBy: contacts.createdBy,
+    })
+    .from(contacts)
+    .where(eq(contacts.id, contactId))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : null;
+}
+
+/**
  * Update contact shared data (with provenance tracking)
  */
 export async function updateContactSharedData(
