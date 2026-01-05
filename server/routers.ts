@@ -3,6 +3,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
+import { agentRouter } from "./routers/agent";
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -1432,68 +1433,7 @@ export const appRouter = router({
       }),
   }),
 
-  agent: router({
-    chat: protectedProcedure
-      .input(z.object({
-        sessionId: z.number().optional(),
-        message: z.string().min(1).max(2000),
-      }))
-      .mutation(async ({ input, ctx }) => {
-        // Stub - agent services exist on main but not on this branch
-        // Return a proper AgentResponse for now
-        return {
-          content: "Agent feature is not yet available on this branch. It will be available after merging with main.",
-          tone: "neutral" as const,
-          suggestedDelayMs: 800,
-          showTypingIndicator: false,
-          confidence: 100,
-          canRetry: false,
-          sessionId: input.sessionId || 0,
-          reasoningSummary: undefined,
-          suggestedFollowups: undefined,
-        };
-      }),
-
-    getSessions: protectedProcedure
-      .input(z.object({ limit: z.number().min(1).max(50).default(10) }).optional())
-      .query(async ({ ctx, input }) => {
-        // Stub - return empty sessions
-        return [];
-      }),
-
-    getSession: protectedProcedure
-      .input(z.object({ sessionId: z.number() }))
-      .query(async ({ input, ctx }) => {
-        // Stub - return null
-        return null;
-      }),
-
-    getConversation: protectedProcedure
-      .input(z.object({
-        sessionId: z.number(),
-        limit: z.number().min(1).max(100).default(50),
-      }))
-      .query(async ({ input, ctx }) => {
-        // Stub - return empty conversation
-        return [];
-      }),
-
-    startSession: protectedProcedure
-      .input(z.object({
-        sessionType: z.enum(["background_scan", "conversational"]),
-        goal: z.string().optional(),
-      }))
-      .mutation(async ({ input, ctx }) => {
-        // Stub - return placeholder session
-        return {
-          id: 0,
-          userId: ctx.user.id,
-          sessionType: input.sessionType,
-          status: "paused",
-          createdAt: new Date(),
-        };
-      }),
-  }),
+  agent: agentRouter,
 });
 
 export type AppRouter = typeof appRouter;
