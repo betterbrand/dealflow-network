@@ -176,7 +176,16 @@ Only include filters that are explicitly mentioned in the query.`;
     }
 
     console.log('[parseQuery] Parsing JSON content:', content);
-    const result = JSON.parse(content);
+
+    // Strip markdown code block markers if present (mor.org models often wrap JSON in ```json ... ```)
+    let cleanedContent = content.trim();
+    if (cleanedContent.startsWith('```json')) {
+      cleanedContent = cleanedContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (cleanedContent.startsWith('```')) {
+      cleanedContent = cleanedContent.replace(/^```\s*/, '').replace(/\s*```$/, '');
+    }
+
+    const result = JSON.parse(cleanedContent);
     
     return {
       parsed: {

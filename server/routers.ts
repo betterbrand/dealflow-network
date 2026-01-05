@@ -1,8 +1,9 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
 import { z } from "zod";
+import { agentRouter } from "./routers/agent";
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -1432,66 +1433,105 @@ export const appRouter = router({
       }),
   }),
 
-  agent: router({
-    chat: protectedProcedure
-      .input(z.object({
-        sessionId: z.number().optional(),
-        message: z.string().min(1).max(2000),
-      }))
-      .mutation(async ({ input, ctx }) => {
-        // Stub - agent services exist on main but not on this branch
-        // Return a proper AgentResponse for now
-        return {
-          content: "Agent feature is not yet available on this branch. It will be available after merging with main.",
-          tone: "neutral" as const,
-          suggestedDelayMs: 800,
-          showTypingIndicator: false,
-          confidence: 100,
-          canRetry: false,
-          sessionId: input.sessionId || 0,
-          reasoningSummary: undefined,
-          suggestedFollowups: undefined,
-        };
+  agent: agentRouter,
+
+  settings: router({
+    // System settings (admin only)
+    getSystemSettings: adminProcedure
+      .input(z.object({ key: z.string().optional() }).optional())
+      .query(async ({ input }) => {
+        const { getSystemSettings } = await import("./db-settings");
+        return await getSystemSettings(input?.key);
       }),
 
-    getSessions: protectedProcedure
-      .input(z.object({ limit: z.number().min(1).max(50).default(10) }).optional())
+    updateSystemSetting: adminProcedure
+      .input(z.object({ key: z.string(), value: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        const { updateSystemSetting } = await import("./db-settings");
+        return await updateSystemSetting(input.key, input.value, ctx.user.id);
+      }),
+
+    // User settings
+    getUserSettings: protectedProcedure
+      .input(z.object({ key: z.string().optional() }).optional())
       .query(async ({ ctx, input }) => {
-        // Stub - return empty sessions
-        return [];
+        const { getUserSettings } = await import("./db-settings");
+        return await getUserSettings(ctx.user.id, input?.key);
       }),
 
-    getSession: protectedProcedure
-      .input(z.object({ sessionId: z.number() }))
-      .query(async ({ input, ctx }) => {
-        // Stub - return null
-        return null;
-      }),
-
-    getConversation: protectedProcedure
-      .input(z.object({
-        sessionId: z.number(),
-        limit: z.number().min(1).max(100).default(50),
-      }))
-      .query(async ({ input, ctx }) => {
-        // Stub - return empty conversation
-        return [];
-      }),
-
-    startSession: protectedProcedure
-      .input(z.object({
-        sessionType: z.enum(["background_scan", "conversational"]),
-        goal: z.string().optional(),
-      }))
+    updateUserSetting: protectedProcedure
+      .input(z.object({ key: z.string(), value: z.string() }))
       .mutation(async ({ input, ctx }) => {
-        // Stub - return placeholder session
-        return {
-          id: 0,
-          userId: ctx.user.id,
-          sessionType: input.sessionType,
-          status: "paused",
-          createdAt: new Date(),
-        };
+        const { updateUserSetting } = await import("./db-settings");
+        return await updateUserSetting(ctx.user.id, input.key, input.value);
+      }),
+
+    deleteUserSetting: protectedProcedure
+      .input(z.object({ key: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        const { deleteUserSetting } = await import("./db-settings");
+        await deleteUserSetting(ctx.user.id, input.key);
+        return { success: true };
+      }),
+
+    getEffectiveSettings: protectedProcedure
+      .query(async ({ ctx }) => {
+        const { getEffectiveSettings } = await import("./db-settings");
+        return await getEffectiveSettings(ctx.user.id);
+      }),
+
+    testLLMConnection: protectedProcedure
+      .input(z.object({
+        model: z.string(),
+        apiUrl: z.string().optional(),
+        apiKey: z.string().optional(),
+        testFallback: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { invokeLLM } = await import("./_core/llm");
+        try {
+          const result = await invokeLLM(
+            { messages: [{ role: "user", content: "Test" }] },
+            {
+              model: input.model,
+              apiUrl: input.apiUrl,
+              apiKey: input.apiKey,
+              maxTokens: 10,
+              enableFallback: input.testFallback || false,
+            }
+          );
+
+          // Detect which provider was used based on model name
+          let provider = "unknown";
+          if (result.model.includes("claude")) {
+            provider = "anthropic";
+          } else if (input.apiUrl?.includes("mor.org")) {
+            provider = "mor-org";
+          } else if (input.apiUrl?.includes("anthropic")) {
+            provider = "anthropic";
+          } else {
+            provider = "mor-org"; // Default assumption
+          }
+
+          return { success: true, model: result.model, provider };
+        } catch (error: any) {
+          return { success: false, error: error.message };
+        }
+      }),
+
+    getAvailableModels: protectedProcedure
+      .input(z.object({ provider: z.enum(["mor-org", "anthropic", "all"]).optional() }).optional())
+      .query(async ({ input }) => {
+        const { getCachedModels } = await import("./services/model-service");
+        const provider = input?.provider === "all" ? undefined : input?.provider;
+        return await getCachedModels(provider);
+      }),
+
+    refreshModels: adminProcedure
+      .mutation(async () => {
+        const { refreshModelCache } = await import("./services/model-service");
+        await refreshModelCache();
+        return { success: true, message: "Model cache refreshed" };
       }),
   }),
 });

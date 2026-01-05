@@ -55,6 +55,25 @@ export type ToolChoice =
   | ToolChoiceByName
   | ToolChoiceExplicit;
 
+export type LLMProvider = "mor-org" | "anthropic" | "openai-legacy";
+
+export type ProviderConfig = {
+  provider: LLMProvider;
+  apiUrl: string;
+  apiKey: string;
+  model: string;
+};
+
+export type InvokeLLMOptions = {
+  model?: string;
+  temperature?: number;
+  apiUrl?: string;
+  apiKey?: string;
+  maxTokens?: number;
+  enableFallback?: boolean;
+  fallbackProvider?: LLMProvider;
+};
+
 export type InvokeParams = {
   messages: Message[];
   tools?: Tool[];
@@ -265,67 +284,257 @@ const normalizeResponseFormat = ({
   };
 };
 
-export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  assertApiKey();
+/**
+ * Convert OpenAI-format request to Anthropic format
+ */
+function convertToAnthropicFormat(params: InvokeParams, options: InvokeLLMOptions) {
+  const { messages } = params;
 
-  const {
-    messages,
-    tools,
-    toolChoice,
-    tool_choice,
-    outputSchema,
-    output_schema,
-    responseFormat,
-    response_format,
-  } = params;
+  // Anthropic requires system message separate from user messages
+  const systemMessage = messages.find(m => m.role === "system");
+  const userMessages = messages.filter(m => m.role !== "system");
 
-  const payload: Record<string, unknown> = {
-    model: "gpt-4o-mini",
-    messages: messages.map(normalizeMessage),
+  return {
+    model: options.model || "claude-sonnet-3-5-20240229",
+    max_tokens: options.maxTokens || params.maxTokens || params.max_tokens || 16384,
+    temperature: options.temperature,
+    system: systemMessage?.content,
+    messages: userMessages.map(msg => ({
+      role: msg.role === "assistant" ? "assistant" : "user",
+      content: typeof msg.content === "string"
+        ? msg.content
+        : Array.isArray(msg.content)
+        ? msg.content.map(c => {
+            if (typeof c === "string") return { type: "text", text: c };
+            if (c.type === "text") return { type: "text", text: c.text };
+            if (c.type === "image_url") return { type: "image", source: { type: "url", url: c.image_url.url } };
+            return c;
+          })
+        : msg.content
+    }))
+  };
+}
+
+/**
+ * Convert Anthropic response to OpenAI format
+ */
+function convertFromAnthropicFormat(anthropicResponse: any): InvokeResult {
+  return {
+    id: anthropicResponse.id || "anthropic-response",
+    created: Date.now(),
+    model: anthropicResponse.model,
+    choices: [{
+      index: 0,
+      message: {
+        role: "assistant" as Role,
+        content: anthropicResponse.content[0]?.text || "",
+      },
+      finish_reason: anthropicResponse.stop_reason === "end_turn" ? "stop" : anthropicResponse.stop_reason,
+    }],
+    usage: {
+      prompt_tokens: anthropicResponse.usage?.input_tokens || 0,
+      completion_tokens: anthropicResponse.usage?.output_tokens || 0,
+      total_tokens: (anthropicResponse.usage?.input_tokens || 0) + (anthropicResponse.usage?.output_tokens || 0),
+    },
+  };
+}
+
+export async function invokeLLM(
+  params: InvokeParams,
+  options?: InvokeLLMOptions
+): Promise<InvokeResult> {
+  // Load mor.org API key from system settings if not provided and not in ENV
+  let morOrgApiKey = options?.apiKey || ENV.morOrgApiKey;
+
+  if (!morOrgApiKey) {
+    try {
+      const { getSystemSettings } = await import("../db-settings");
+      const settings = await getSystemSettings("llm_mor_org_api_key");
+      if (settings.length > 0) {
+        morOrgApiKey = JSON.parse(settings[0].value);
+      }
+    } catch (error) {
+      // Fallback to ENV if system settings fail
+    }
+  }
+
+  // Determine provider configuration
+  const primaryProvider: ProviderConfig = {
+    provider: "mor-org",
+    apiUrl: options?.apiUrl || "https://api.mor.org/api/v1/chat/completions",
+    apiKey: morOrgApiKey,
+    model: options?.model || "auto",
   };
 
-  if (tools && tools.length > 0) {
-    payload.tools = tools;
+  try {
+    return await invokeLLMWithProvider(params, options, primaryProvider);
+  } catch (error: any) {
+    // Check if fallback is enabled and available
+    const shouldFallback =
+      options?.enableFallback !== false &&
+      ENV.anthropicApiKey &&
+      isFallbackEligibleError(error);
+
+    if (!shouldFallback) {
+      throw error;
+    }
+
+    console.warn("[LLM] Primary provider (mor.org) failed, falling back to Anthropic:", error.message);
+
+    const fallbackProvider: ProviderConfig = {
+      provider: "anthropic",
+      apiUrl: "https://api.anthropic.com/v1/messages",
+      apiKey: ENV.anthropicApiKey,
+      model: mapToAnthropicModel(options?.model || "auto"),
+    };
+
+    try {
+      return await invokeLLMWithProvider(params, options, fallbackProvider);
+    } catch (fallbackError: any) {
+      console.error("[LLM] Fallback provider (Anthropic) also failed:", fallbackError.message);
+      throw new Error(`All LLM providers failed. Primary: ${error.message}, Fallback: ${fallbackError.message}`);
+    }
+  }
+}
+
+/**
+ * Invoke LLM with a specific provider
+ */
+async function invokeLLMWithProvider(
+  params: InvokeParams,
+  options: InvokeLLMOptions | undefined,
+  provider: ProviderConfig
+): Promise<InvokeResult> {
+  if (provider.provider === "anthropic") {
+    return await invokeAnthropic(params, options, provider);
   }
 
+  // mor.org and OpenAI-compatible providers use the same format
+  return await invokeMorOrg(params, options, provider);
+}
+
+/**
+ * Invoke mor.org or OpenAI-compatible API
+ */
+async function invokeMorOrg(
+  params: InvokeParams,
+  options: InvokeLLMOptions | undefined,
+  provider: ProviderConfig
+): Promise<InvokeResult> {
+  const normalizedMessages = params.messages.map(normalizeMessage);
   const normalizedToolChoice = normalizeToolChoice(
-    toolChoice || tool_choice,
-    tools
+    params.toolChoice || params.tool_choice,
+    params.tools
   );
-  if (normalizedToolChoice) {
-    payload.tool_choice = normalizedToolChoice;
+
+  const payload: any = {
+    model: provider.model,
+    messages: normalizedMessages,
+  };
+
+  if (params.tools && params.tools.length > 0) {
+    payload.tools = params.tools;
+    if (normalizedToolChoice) {
+      payload.tool_choice = normalizedToolChoice;
+    }
   }
 
-  payload.max_tokens = 16384;
+  payload.max_tokens = options?.maxTokens || params.maxTokens || params.max_tokens || 16384;
+
+  if (options?.temperature !== undefined) {
+    payload.temperature = options.temperature;
+  }
 
   const normalizedResponseFormat = normalizeResponseFormat({
-    responseFormat,
-    response_format,
-    outputSchema,
-    output_schema,
+    responseFormat: params.responseFormat,
+    response_format: params.response_format,
+    outputSchema: params.outputSchema,
+    output_schema: params.output_schema,
   });
 
   if (normalizedResponseFormat) {
     payload.response_format = normalizedResponseFormat;
   }
 
-  const response = await fetch(resolveApiUrl(), {
+  const response = await fetch(provider.apiUrl, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
+      "authorization": `Bearer ${provider.apiKey}`,
     },
     body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('[invokeLLM] API Error Response:', errorText);
-    console.error('[invokeLLM] Request payload:', JSON.stringify(payload, null, 2));
-    throw new Error(
-      `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
-    );
+    console.error("[LLM] Error from mor.org:", response.status, errorText);
+    throw new Error(`mor.org API error (${response.status}): ${errorText}`);
   }
 
-  return (await response.json()) as InvokeResult;
+  const result = await response.json();
+  return result as InvokeResult;
+}
+
+/**
+ * Invoke Anthropic API
+ */
+async function invokeAnthropic(
+  params: InvokeParams,
+  options: InvokeLLMOptions | undefined,
+  provider: ProviderConfig
+): Promise<InvokeResult> {
+  const anthropicPayload = convertToAnthropicFormat(params, { ...options, model: provider.model } as InvokeLLMOptions);
+
+  const response = await fetch(provider.apiUrl, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": provider.apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify(anthropicPayload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("[LLM] Error from Anthropic:", response.status, errorText);
+    throw new Error(`Anthropic API error (${response.status}): ${errorText}`);
+  }
+
+  const result = await response.json();
+  return convertFromAnthropicFormat(result);
+}
+
+/**
+ * Determine if error is eligible for fallback
+ */
+function isFallbackEligibleError(error: any): boolean {
+  const message = error.message?.toLowerCase() || "";
+
+  // Fallback on infrastructure/availability errors
+  if (message.includes("500") || message.includes("503") || message.includes("timeout")) return true;
+  if (message.includes("429") || message.includes("rate limit")) return true;
+  if (message.includes("401") || message.includes("403") || message.includes("authentication")) return true;
+  if (message.includes("404") && message.includes("model")) return true;
+
+  // Do NOT fallback on content/validation errors
+  if (message.includes("400")) return false;
+  if (message.includes("content policy")) return false;
+
+  return false;
+}
+
+/**
+ * Map mor.org model names to Anthropic equivalents
+ */
+function mapToAnthropicModel(model: string): string {
+  const mapping: Record<string, string> = {
+    "auto": "claude-sonnet-3-5-20240229",
+    "gpt-4o": "claude-sonnet-3-5-20240229",
+    "gpt-4o-mini": "claude-sonnet-3-5-20240229",
+    "claude-sonnet-3.5": "claude-sonnet-3-5-20240229",
+    "claude-opus-3.5": "claude-opus-3-5-20241022",
+  };
+
+  return mapping[model] || "claude-sonnet-3-5-20240229";
 }

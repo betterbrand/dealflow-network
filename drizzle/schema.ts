@@ -1,4 +1,4 @@
-import { index, int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { index, int, json, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -558,3 +558,63 @@ export const agentConversations = mysqlTable("agentConversations", {
 
 export type AgentConversation = typeof agentConversations.$inferSelect;
 export type InsertAgentConversation = typeof agentConversations.$inferInsert;
+
+/**
+ * System Settings table - admin-managed defaults
+ * Stores application-wide configuration like default LLM settings
+ */
+export const systemSettings = mysqlTable("systemSettings", {
+  id: int("id").autoincrement().primaryKey(),
+  key: varchar("key", { length: 100 }).notNull().unique(),
+  value: text("value").notNull(), // JSON string
+  category: varchar("category", { length: 50 }).notNull(),
+  description: text("description"),
+  updatedBy: int("updatedBy").references(() => users.id),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  categoryIdx: index("idx_system_settings_category").on(table.category),
+}));
+
+export type SystemSetting = typeof systemSettings.$inferSelect;
+export type InsertSystemSetting = typeof systemSettings.$inferInsert;
+
+/**
+ * User Settings table - user-specific overrides
+ * Allows users to customize their own settings (e.g., preferred LLM model)
+ */
+export const userSettings = mysqlTable("userSettings", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  key: varchar("key", { length: 100 }).notNull(),
+  value: text("value").notNull(), // JSON string
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userKeyIdx: uniqueIndex("idx_user_settings_user_key").on(table.userId, table.key),
+  userIdx: index("idx_user_settings_user").on(table.userId),
+}));
+
+export type UserSetting = typeof userSettings.$inferSelect;
+export type InsertUserSetting = typeof userSettings.$inferInsert;
+
+/**
+ * Available LLM Models - cached from provider APIs
+ */
+export const availableModels = mysqlTable("availableModels", {
+  id: int("id").autoincrement().primaryKey(),
+  provider: varchar("provider", { length: 50 }).notNull(), // "mor-org", "anthropic"
+  modelId: varchar("modelId", { length: 200 }).notNull().unique(),
+  displayName: varchar("displayName", { length: 200 }).notNull(),
+  description: text("description"),
+  contextWindow: int("contextWindow"),
+  pricing: json("pricing"), // { input: number, output: number }
+  capabilities: json("capabilities"), // { vision: bool, tools: bool, streaming: bool }
+  lastFetched: timestamp("lastFetched").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  providerIdx: index("idx_available_models_provider").on(table.provider),
+}));
+
+export type AvailableModel = typeof availableModels.$inferSelect;
+export type InsertAvailableModel = typeof availableModels.$inferInsert;

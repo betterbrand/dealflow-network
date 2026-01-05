@@ -235,7 +235,7 @@ export async function parseMessage(
         type: "json_schema",
         json_schema: {
           name: "message_analysis",
-          strict: true,
+          strict: false,
           schema: {
             type: "object",
             properties: {
@@ -260,6 +260,7 @@ export async function parseMessage(
                       targetCompany: { type: "string" },
                       query: { type: "string" },
                     },
+                    required: [],
                     additionalProperties: false,
                   },
                   confidence: { type: "number" },
