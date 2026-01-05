@@ -105,9 +105,9 @@
   --chart-4: oklch(0.48 0.16 270);
   --chart-5: oklch(0.42 0.15 275);
 
-  /* Deep true black background - luxury feel */
-  --background: oklch(0.08 0.005 50);
-  --foreground: oklch(0.92 0.01 55);
+  /* Deep true black background with warmth - luxury feel */
+  --background: oklch(0.09 0.006 50);
+  --foreground: oklch(0.96 0.01 55);
 
   /* Card with better separation from background */
   --card: oklch(0.16 0.008 50);

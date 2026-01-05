@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useTheme } from "@/contexts/ThemeContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -30,17 +31,17 @@ cytoscape.use(contextMenus);
 
 type GraphMode = "user-centric" | "relationships";
 
-// Colors for different degrees
+// Colors for different degrees - using Sapphire Blue brand color
 const DEGREE_COLORS = {
-  0: "#6366f1", // User - Indigo
-  1: "#3b82f6", // Direct contacts - Blue
+  0: "#5b7ff8", // User - Sapphire Blue (brand primary)
+  1: "#5b7ff8", // Direct contacts - Sapphire Blue
   2: "#10b981", // 2nd degree - Emerald
   3: "#f59e0b", // 3rd degree - Amber
 };
 
-// Edge type colors
+// Edge type colors - using Sapphire Blue for primary connections
 const EDGE_TYPE_COLORS = {
-  direct_contact: "#6366f1",
+  direct_contact: "#5b7ff8", // Sapphire Blue (brand primary)
   people_also_viewed: "#10b981",
   same_company: "#f59e0b",
   same_school: "#8b5cf6",
@@ -49,6 +50,7 @@ const EDGE_TYPE_COLORS = {
 
 export default function Graph() {
   const { user, loading: authLoading } = useAuth();
+  const { theme } = useTheme();
   const [, setLocation] = useLocation();
   const searchParams = useSearch();
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -358,8 +360,8 @@ export default function Graph() {
         "text-margin-y": 8,
         "font-size": "11px",
         "font-weight": "500",
-        color: "#1e293b",
-        "text-background-color": "rgba(255, 255, 255, 0.9)",
+        color: theme === "dark" ? "#fafafa" : "#1e293b",
+        "text-background-color": theme === "dark" ? "rgba(0, 0, 0, 0.75)" : "rgba(255, 255, 255, 0.9)",
         "text-background-opacity": 1,
         "text-background-padding": "4px",
         "text-background-shape": "roundrectangle",

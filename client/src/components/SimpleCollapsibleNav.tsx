@@ -67,8 +67,8 @@ export function SimpleCollapsibleNav() {
               key={item.path}
               onClick={() => setLocation(item.path)}
               className={cn(
-                "flex w-full items-center gap-2 rounded-md p-2 text-sm",
-                isActive && "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
+                "flex w-full items-center gap-2 rounded-md p-2 text-sm transition-all duration-200",
+                isActive && "bg-sidebar-accent font-medium text-sidebar-accent-foreground dark:shadow-[0_0_15px_rgba(91,127,248,0.15)]",
                 isCollapsed && "justify-center"
               )}
               title={isCollapsed ? item.label : undefined}

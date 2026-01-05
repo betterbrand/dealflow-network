@@ -106,12 +106,12 @@ export default function SemanticGraph() {
       // Determine entity type
       const typeField = entity["22-rdf-syntax-ns#type"] || entity.type;
       let entityType: "Person" | "Organization" | "EducationalOrganization" | "Activity" = "Person";
-      let color = "#3b82f6"; // Default blue
+      let color = "#5b7ff8"; // Default Sapphire Blue (brand primary)
 
       if (typeof typeField === "string") {
         if (typeField.includes("Person")) {
           entityType = "Person";
-          color = "#3b82f6"; // Blue
+          color = "#5b7ff8"; // Sapphire Blue (brand primary)
         } else if (typeField.includes("Organization")) {
           entityType = "Organization";
           color = "#10b981"; // Green
@@ -231,8 +231,8 @@ export default function SemanticGraph() {
       selector: "edge:selected",
       style: {
         width: 3,
-        "line-color": "#3b82f6",
-        "target-arrow-color": "#3b82f6",
+        "line-color": "#5b7ff8", // Sapphire Blue (brand primary)
+        "target-arrow-color": "#5b7ff8", // Sapphire Blue (brand primary)
       },
     },
   ];

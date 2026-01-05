@@ -46,7 +46,7 @@ export default function Login() {
         <CardHeader className="space-y-4 text-center">
           {APP_LOGO && (
             <div className="flex justify-center">
-              <img src={APP_LOGO} alt={APP_TITLE} className="h-16 w-16 object-contain" />
+              <img src={APP_LOGO} alt={APP_TITLE} className="h-16 w-16 object-contain dark:invert dark:brightness-90" />
             </div>
           )}
           <div>
