@@ -1,4 +1,4 @@
-import { index, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { index, int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -140,12 +140,21 @@ export const contacts = mysqlTable("contacts", {
   // === Opportunity ===
   opportunity: text("opportunity"), // Why this contact matters - deal/opportunity context
 
+  // === Privacy & Access Control ===
+  isPrivate: int("is_private").default(0).notNull(), // 0 = shared (public), 1 = private (requires access request)
+
   // Metadata
   companyId: int("companyId").references(() => companies.id),
   createdBy: int("createdBy").notNull().references(() => users.id), // Who first created this contact
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (table) => ({
+  emailIdx: index("idx_contacts_email").on(table.email),
+  linkedinUrlIdx: index("idx_contacts_linkedin").on(table.linkedinUrl),
+  createdByIdx: index("idx_contacts_created_by").on(table.createdBy),
+  isPrivateIdx: index("idx_contacts_is_private").on(table.isPrivate),
+  createdByPrivateIdx: index("idx_contacts_created_private").on(table.createdBy, table.isPrivate),
+}));
 
 export type Contact = typeof contacts.$inferSelect;
 export type InsertContact = typeof contacts.$inferInsert;
@@ -203,6 +212,61 @@ export const contactContributions = mysqlTable("contactContributions", {
 
 export type ContactContribution = typeof contactContributions.$inferSelect;
 export type InsertContactContribution = typeof contactContributions.$inferInsert;
+
+/**
+ * Contact access requests table - manages requests to access private contacts
+ * Enables the hybrid contact visibility model (private vs shared)
+ */
+export const contactAccessRequests = mysqlTable("contact_access_requests", {
+  id: int("id").autoincrement().primaryKey(),
+  contactId: int("contact_id").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  requesterId: int("requester_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  status: mysqlEnum("status", ["pending", "approved", "denied"]).notNull().default("pending"),
+  message: text("message"), // Optional message from requester
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  respondedAt: timestamp("responded_at"), // When owner approved/denied
+  respondedBy: int("responded_by").references(() => users.id, { onDelete: "set null" }),
+}, (table) => ({
+  // Unique constraint: Prevent duplicate pending/approved requests
+  uniqueRequest: index("idx_car_unique").on(table.contactId, table.requesterId),
+  // Performance indexes
+  statusIdx: index("idx_car_status").on(table.status),
+  requesterIdx: index("idx_car_requester").on(table.requesterId),
+  contactIdx: index("idx_car_contact").on(table.contactId),
+  ownerIdx: index("idx_car_owner").on(table.respondedBy),
+}));
+
+export type ContactAccessRequest = typeof contactAccessRequests.$inferSelect;
+export type InsertContactAccessRequest = typeof contactAccessRequests.$inferInsert;
+
+/**
+ * Notifications table - stores in-app notifications for users
+ * Used for access request approvals/denials and other system events
+ */
+export const notifications = mysqlTable("notifications", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: mysqlEnum("type", ["contact_access_request", "contact_access_approved", "contact_access_denied"]).notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  message: text("message"),
+  actionUrl: varchar("action_url", { length: 500 }), // Optional link to relevant page
+
+  // Specific foreign keys instead of generic relatedId
+  accessRequestId: int("access_request_id").references(() => contactAccessRequests.id, { onDelete: "cascade" }),
+  contactId: int("contact_id").references(() => contacts.id, { onDelete: "cascade" }),
+
+  isRead: int("is_read").default(0).notNull(), // 0 = unread, 1 = read
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  readAt: timestamp("read_at"),
+}, (table) => ({
+  // Performance indexes
+  userIdx: index("idx_notif_user").on(table.userId),
+  unreadIdx: index("idx_notif_user_unread").on(table.userId, table.isRead), // Composite for common query
+  typeIdx: index("idx_notif_type").on(table.type),
+}));
+
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = typeof notifications.$inferInsert;
 
 /**
  * Companies table - stores organizations that contacts work for

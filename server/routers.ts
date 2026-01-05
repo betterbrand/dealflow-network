@@ -92,7 +92,24 @@ export const appRouter = router({
         const { getUserContact } = await import("./db-collaborative");
         return await getUserContact(ctx.user.id, input.id);
       }),
-    
+
+    getMetadata: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const { getContactMetadata } = await import("./db-collaborative");
+        const { getContactAccessStatus } = await import("./access-control");
+
+        const metadata = await getContactMetadata(input.id);
+        if (!metadata) return null;
+
+        const accessStatus = await getContactAccessStatus(ctx.user.id, input.id);
+
+        return {
+          ...metadata,
+          accessStatus,
+        };
+      }),
+
     search: protectedProcedure
       .input(z.object({ query: z.string() }))
       .query(async ({ input }) => {
@@ -402,6 +419,7 @@ export const appRouter = router({
         interestLevel: z.string().optional(),
         eventId: z.number().optional(),
         companyId: z.number().optional(),
+        isPrivate: z.boolean().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const { createOrLinkContact } = await import("./db-collaborative");
@@ -411,7 +429,7 @@ export const appRouter = router({
         const { getOrCreateCompanyForContact } = await import("./db-company-auto-create");
 
         // Separate shared contact data from user-specific data
-        const { notes, conversationSummary, actionItems, sentiment, interestLevel, eventId, ...contactData } = input;
+        const { notes, conversationSummary, actionItems, sentiment, interestLevel, eventId, isPrivate, ...contactData } = input;
 
         // Auto-create company if not explicitly provided but company name exists
         if (!contactData.companyId && contactData.company) {
@@ -439,7 +457,8 @@ export const appRouter = router({
             sentiment,
             interestLevel,
             eventId,
-          }
+          },
+          isPrivate ?? false
         );
         
         // Store social profiles and trigger enrichment
@@ -661,7 +680,7 @@ export const appRouter = router({
         // Create user node
         const userNode = {
           id: ctx.user.id,
-          name: ctx.user.name || ctx.user.email.split('@')[0],
+          name: ctx.user.name || ctx.user.email?.split('@')[0] || 'User',
           degree: 0,
           isUser: true,
           followers: 0,
@@ -1330,6 +1349,86 @@ export const appRouter = router({
           return { success: false, message: "Cannot remove yourself" };
         }
         return removeAuthorizedUser(input.email);
+      }),
+  }),
+
+  notifications: router({
+    // Get user notifications (optionally unread only)
+    list: protectedProcedure
+      .input(z.object({ unreadOnly: z.boolean().optional() }).optional())
+      .query(async ({ input, ctx }) => {
+        const { getUserNotifications } = await import("./db-notifications");
+        return await getUserNotifications(ctx.user.id, input?.unreadOnly ?? false);
+      }),
+
+    // Mark notification as read
+    markAsRead: protectedProcedure
+      .input(z.object({ notificationId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const { markNotificationAsRead } = await import("./db-notifications");
+        await markNotificationAsRead(ctx.user.id, input.notificationId);
+        return { success: true };
+      }),
+
+    // Mark all notifications as read
+    markAllAsRead: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        const { markAllNotificationsAsRead } = await import("./db-notifications");
+        await markAllNotificationsAsRead(ctx.user.id);
+        return { success: true };
+      }),
+
+    // Get unread notification count
+    getUnreadCount: protectedProcedure
+      .query(async ({ ctx }) => {
+        const { getUnreadNotificationCount } = await import("./db-notifications");
+        return await getUnreadNotificationCount(ctx.user.id);
+      }),
+  }),
+
+  accessRequests: router({
+    // Request access to a private contact
+    request: protectedProcedure
+      .input(z.object({
+        contactId: z.number(),
+        message: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { requestContactAccess } = await import("./db-access-requests");
+        return await requestContactAccess(ctx.user.id, input.contactId, input.message);
+      }),
+
+    // Approve access request
+    approve: protectedProcedure
+      .input(z.object({ requestId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const { approveContactAccess } = await import("./db-access-requests");
+        await approveContactAccess(input.requestId, ctx.user.id);
+        return { success: true };
+      }),
+
+    // Deny access request
+    deny: protectedProcedure
+      .input(z.object({ requestId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const { denyContactAccess } = await import("./db-access-requests");
+        await denyContactAccess(input.requestId, ctx.user.id);
+        return { success: true };
+      }),
+
+    // Get pending access requests (for contacts I own)
+    getPending: protectedProcedure
+      .query(async ({ ctx }) => {
+        const { getPendingAccessRequests } = await import("./db-access-requests");
+        return await getPendingAccessRequests(ctx.user.id);
+      }),
+
+    // Get access status for a contact
+    getStatus: protectedProcedure
+      .input(z.object({ contactId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const { getContactAccessStatus } = await import("./access-control");
+        return await getContactAccessStatus(ctx.user.id, input.contactId);
       }),
   }),
 

@@ -63,7 +63,8 @@ jobs:
               'honorsAndAwards text', 'lastEnrichedAt timestamp',
               'enrichmentSource varchar(50)',
               'lastImportedAt timestamp', 'importSource varchar(50)',
-              'importStatus varchar(50)', 'opportunity text'
+              'importStatus varchar(50)', 'opportunity text',
+              'is_private int DEFAULT 0 NOT NULL'
             ];
             for (const col of columns) {
               const name = col.split(' ')[0];

@@ -1,7 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Mail, Phone, MapPin, Building2, Calendar, User, Linkedin, Twitter, Plus, ExternalLink, Briefcase, GraduationCap, FileText, Users, Download, RefreshCw, Loader2, CheckCircle, XCircle, Lightbulb, Trash2, Database, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, Building2, Calendar, User, Linkedin, Twitter, Plus, ExternalLink, Briefcase, GraduationCap, FileText, Users, Download, RefreshCw, Loader2, CheckCircle, XCircle, Lightbulb, Trash2, Database, ChevronDown, ChevronUp, Lock } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,6 +29,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { RequestAccessDialog } from "@/components/RequestAccessDialog";
 
 export default function ContactDetail() {
   const params = useParams();
@@ -44,9 +45,14 @@ export default function ContactDetail() {
   const [previewData, setPreviewData] = useState<any>(null);
   const [importCompany, setImportCompany] = useState(false);
   const [showSemanticData, setShowSemanticData] = useState(false);
+  const [showRequestAccessDialog, setShowRequestAccessDialog] = useState(false);
 
   const utils = trpc.useUtils();
   const { data: contact, isLoading, refetch } = trpc.contacts.get.useQuery({ id: contactId });
+  const { data: contactMetadata } = trpc.contacts.getMetadata.useQuery(
+    { id: contactId },
+    { enabled: !isLoading && !contact }
+  );
   const { data: relationships, refetch: refetchRelationships } = trpc.relationships.getForContact.useQuery({ contactId });
   const { data: availableProviders } = trpc.contacts.getAvailableProviders.useQuery();
   const { data: semanticData } = trpc.semanticGraph.getContactTriples.useQuery(
@@ -92,6 +98,74 @@ export default function ContactDetail() {
   }
 
   if (!contact) {
+    // Check if we have metadata (contact exists but user doesn't have access)
+    if (contactMetadata) {
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center gap-4">
+            <Link href="/contacts">
+              <Button variant="ghost" size="sm">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Contacts
+              </Button>
+            </Link>
+          </div>
+
+          <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-700">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lock className="h-5 w-5 text-amber-700" />
+                Private Contact
+              </CardTitle>
+              <CardDescription>
+                This contact is private and requires permission to view.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <div className="text-sm font-medium mb-1">Contact Name</div>
+                <div className="text-lg font-semibold">{contactMetadata.name}</div>
+              </div>
+
+              {contactMetadata.accessStatus === 'pending' && (
+                <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 p-3">
+                  <p className="text-sm text-blue-900 dark:text-blue-100">
+                    You have a pending access request for this contact.
+                  </p>
+                </div>
+              )}
+
+              {contactMetadata.accessStatus === 'denied' && (
+                <div className="rounded-lg bg-destructive/10 p-3">
+                  <p className="text-sm text-destructive">
+                    Your access request was denied.
+                  </p>
+                </div>
+              )}
+
+              {(contactMetadata.accessStatus === 'none' || contactMetadata.accessStatus === 'denied') && (
+                <Button
+                  onClick={() => setShowRequestAccessDialog(true)}
+                  className="w-full"
+                >
+                  <Lock className="mr-2 h-4 w-4" />
+                  Request Access
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          <RequestAccessDialog
+            open={showRequestAccessDialog}
+            onOpenChange={setShowRequestAccessDialog}
+            contactId={contactId}
+            contactName={contactMetadata.name}
+          />
+        </div>
+      );
+    }
+
+    // Contact truly doesn't exist
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">

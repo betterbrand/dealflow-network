@@ -74,7 +74,8 @@ export async function findDuplicateContact(data: {
 export async function createOrLinkContact(
   userId: number,
   contactData: Omit<Partial<InsertContact>, 'name'> & { name: string },
-  userContactData?: Partial<InsertUserContact>
+  userContactData?: Partial<InsertUserContact>,
+  isPrivate: boolean = false
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -95,7 +96,7 @@ export async function createOrLinkContact(
     // Contact already exists, just link the user to it
     contactId = duplicate.contact.id;
     matchedBy = duplicate.matchedBy;
-    
+
     // Check if user is already linked
     const existingLink = await db
       .select()
@@ -107,7 +108,7 @@ export async function createOrLinkContact(
         )
       )
       .limit(1);
-    
+
     if (existingLink.length === 0) {
       // Create new user-contact link
       await db.insert(userContacts).values({
@@ -115,7 +116,7 @@ export async function createOrLinkContact(
         contactId,
         ...userContactData,
       });
-      
+
       // Log contribution
       await db.insert(contactContributions).values({
         contactId,
@@ -128,21 +129,22 @@ export async function createOrLinkContact(
   } else {
     // Create new contact
     isNew = true;
-    
+
     const [newContact] = await db.insert(contacts).values({
       ...contactData,
       createdBy: userId,
+      isPrivate: isPrivate ? 1 : 0,
     }).$returningId();
-    
+
     contactId = newContact.id;
-    
+
     // Create user-contact link
     await db.insert(userContacts).values({
       userId,
       contactId,
       ...userContactData,
     });
-    
+
     // Log initial contribution
     await db.insert(contactContributions).values({
       contactId,
@@ -186,6 +188,7 @@ export async function getUserContacts(userId: number) {
       createdBy: contacts.createdBy,
       createdAt: contacts.createdAt,
       updatedAt: contacts.updatedAt,
+      isPrivate: contacts.isPrivate,
 
       // Enrichment fields
       followers: contacts.followers,
@@ -260,6 +263,7 @@ export async function getUserContact(userId: number, contactId: number) {
       createdBy: contacts.createdBy,
       createdAt: contacts.createdAt,
       updatedAt: contacts.updatedAt,
+      isPrivate: contacts.isPrivate,
 
       // Enrichment fields
       followers: contacts.followers,
@@ -311,6 +315,28 @@ export async function getUserContact(userId: number, contactId: number) {
 }
 
 /**
+ * Get basic contact metadata (for access-restricted contacts)
+ * Returns minimal info even if user doesn't have access
+ */
+export async function getContactMetadata(contactId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db
+    .select({
+      id: contacts.id,
+      name: contacts.name,
+      isPrivate: contacts.isPrivate,
+      createdBy: contacts.createdBy,
+    })
+    .from(contacts)
+    .where(eq(contacts.id, contactId))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : null;
+}
+
+/**
  * Update contact shared data (with provenance tracking)
  */
 export async function updateContactSharedData(
@@ -330,9 +356,14 @@ export async function updateContactSharedData(
 
   if (!current) throw new Error("Contact not found");
 
+  // Check permission: Only owner can edit shared contact data
+  if (current.createdBy !== userId) {
+    throw new Error("UNAUTHORIZED: You do not have permission to edit this contact");
+  }
+
   // Track which fields changed
   const changedFields: Array<{ field: string; oldValue: string; newValue: string }> = [];
-  
+
   for (const [key, newValue] of Object.entries(updates)) {
     const oldValue = current[key as keyof typeof current];
     if (oldValue !== newValue && newValue !== undefined) {
@@ -450,15 +481,45 @@ export async function unlinkUserContact(userId: number, contactId: number) {
         eq(userContacts.contactId, contactId)
       )
     );
-  
+
   // Check if any other users are linked to this contact
   const remainingLinks = await db
     .select()
     .from(userContacts)
     .where(eq(userContacts.contactId, contactId));
-  
+
   // If no one else knows this contact, delete it entirely
   if (remainingLinks.length === 0) {
     await db.delete(contacts).where(eq(contacts.id, contactId));
   }
+}
+
+/**
+ * Create user-contact link (used in access request approval flow)
+ */
+export async function createUserContactLink(userId: number, contactId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // Check if link already exists
+  const existing = await db
+    .select()
+    .from(userContacts)
+    .where(and(
+      eq(userContacts.userId, userId),
+      eq(userContacts.contactId, contactId)
+    ))
+    .limit(1);
+
+  if (existing.length > 0) {
+    return existing[0].id;
+  }
+
+  // Create new link
+  const [link] = await db.insert(userContacts).values({
+    userId,
+    contactId,
+  }).$returningId();
+
+  return link.id;
 }
