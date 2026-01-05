@@ -1111,14 +1111,14 @@ export default function Graph() {
         if (data.isUser) {
           tooltip.innerHTML = `
             <div class="font-semibold text-gray-900 dark:text-white">You</div>
-            <div class="text-gray-500 dark:text-gray-500 text-xs mt-1">Center of your network</div>
+            <div class="text-muted-foreground text-xs mt-1">Center of your network</div>
           `;
         } else {
           tooltip.innerHTML = `
             <div class="font-semibold text-gray-900 dark:text-white">${data.name}</div>
-            ${data.company ? `<div class="text-gray-600 dark:text-gray-400">${data.company}</div>` : ""}
-            ${data.role ? `<div class="text-gray-500 dark:text-gray-500 text-xs">${data.role}</div>` : ""}
-            <div class="text-gray-500 dark:text-gray-500 text-xs mt-1">
+            ${data.company ? `<div class="text-muted-foreground">${data.company}</div>` : ""}
+            ${data.role ? `<div class="text-muted-foreground text-xs">${data.role}</div>` : ""}
+            <div class="text-muted-foreground text-xs mt-1">
               ${data.followers ? `${data.followers.toLocaleString()} followers` : ""}
               ${data.followers && data.connections ? " · " : ""}
               ${data.connections ? `${data.connections} connections` : ""}

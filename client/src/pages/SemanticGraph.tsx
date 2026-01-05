@@ -273,14 +273,14 @@ export default function SemanticGraph() {
         "absolute z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 text-sm pointer-events-none max-w-xs";
 
       let tooltipContent = `<div class="font-semibold text-gray-900 dark:text-white">${data.label}</div>`;
-      tooltipContent += `<div class="text-gray-600 dark:text-gray-400 text-xs mt-1">Type: ${data.type}</div>`;
+      tooltipContent += `<div class="text-muted-foreground text-xs mt-1">Type: ${data.type}</div>`;
 
       if (data.details) {
         if (data.details.jobTitle) {
-          tooltipContent += `<div class="text-gray-500 dark:text-gray-500 text-xs">${data.details.jobTitle}</div>`;
+          tooltipContent += `<div class="text-muted-foreground text-xs">${data.details.jobTitle}</div>`;
         }
         if (data.details.startDate || data.details.endDate) {
-          tooltipContent += `<div class="text-gray-500 dark:text-gray-500 text-xs">${data.details.startDate || ''} - ${data.details.endDate || 'Present'}</div>`;
+          tooltipContent += `<div class="text-muted-foreground text-xs">${data.details.startDate || ''} - ${data.details.endDate || 'Present'}</div>`;
         }
       }
 
