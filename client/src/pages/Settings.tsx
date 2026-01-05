@@ -10,23 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, Save, RotateCcw, Zap, ChevronDown, ChevronUp } from "lucide-react";
-
-const LLM_MODELS = [
-  { value: "gpt-4o-mini", label: "GPT-4o Mini (Recommended)" },
-  { value: "gpt-4o", label: "GPT-4o" },
-  { value: "gpt-4o-2024-08-06", label: "GPT-4o (2024-08-06)" },
-  { value: "claude-sonnet-3.5", label: "Claude Sonnet 3.5" },
-  { value: "claude-opus-3.5", label: "Claude Opus 3.5" },
-  { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-];
+import { Settings as SettingsIcon, Save, RotateCcw, Zap, ChevronDown, ChevronUp, RefreshCw, Loader2 } from "lucide-react";
 
 export default function Settings() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
 
   // User settings state
-  const [model, setModel] = useState("gpt-4o-mini");
+  const [model, setModel] = useState("auto");
   const [maxTokens, setMaxTokens] = useState(16384);
   const [temperature, setTemperature] = useState(0.7);
   const [apiUrl, setApiUrl] = useState("");
@@ -36,7 +27,7 @@ export default function Settings() {
   const [testStatus, setTestStatus] = useState<{ success: boolean; message: string } | null>(null);
 
   // Admin settings state (for system defaults)
-  const [adminModel, setAdminModel] = useState("gpt-4o-mini");
+  const [adminModel, setAdminModel] = useState("auto");
   const [adminMaxTokens, setAdminMaxTokens] = useState(16384);
   const [adminTemperature, setAdminTemperature] = useState(0.7);
   const [adminApiUrl, setAdminApiUrl] = useState("");
@@ -47,6 +38,9 @@ export default function Settings() {
   const { data: systemSettings } = trpc.settings.getSystemSettings.useQuery(undefined, {
     enabled: user?.role === "admin",
   });
+
+  // Fetch available models
+  const { data: availableModels = [] } = trpc.settings.getAvailableModels.useQuery({ provider: "mor-org" });
 
   // Update mutations
   const updateUserMutation = trpc.settings.updateUserSetting.useMutation({
@@ -81,10 +75,30 @@ export default function Settings() {
 
   const testConnectionMutation = trpc.settings.testLLMConnection.useMutation();
 
+  const refreshModelsMutation = trpc.settings.refreshModels.useMutation({
+    onSuccess: () => {
+      utils.settings.getAvailableModels.invalidate();
+      toast.success("Models refreshed from mor.org");
+    },
+    onError: (error) => {
+      toast.error(`Failed to refresh models: ${error.message}`);
+    },
+  });
+
+  // Model options: Auto-select + dynamic mor.org models
+  const modelOptions = [
+    { value: "auto", label: "Auto-Select (Recommended)", description: "mor.org automatically selects the best model" },
+    ...availableModels.map(m => ({
+      value: m.modelId,
+      label: m.displayName,
+      description: m.description || `${m.contextWindow?.toLocaleString()} tokens`,
+    })),
+  ];
+
   // Load settings when data arrives
   useEffect(() => {
     if (effectiveSettings) {
-      setModel(effectiveSettings.llm_default_model || "gpt-4o-mini");
+      setModel(effectiveSettings.llm_default_model || "auto");
       setMaxTokens(effectiveSettings.llm_default_max_tokens || 16384);
       setTemperature(effectiveSettings.llm_default_temperature || 0.7);
       setApiUrl(effectiveSettings.llm_default_api_url || "");
@@ -268,13 +282,21 @@ export default function Settings() {
                     <SelectValue placeholder="Select a model" />
                   </SelectTrigger>
                   <SelectContent>
-                    {LLM_MODELS.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>
-                        {m.label}
+                    {modelOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{option.label}</span>
+                          {option.description && (
+                            <span className="text-xs text-muted-foreground">{option.description}</span>
+                          )}
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Provider: mor.org {effectiveSettings?.llm_fallback_provider && `→ ${effectiveSettings.llm_fallback_provider} fallback`}
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -409,9 +431,14 @@ export default function Settings() {
                       <SelectValue placeholder="Select a model" />
                     </SelectTrigger>
                     <SelectContent>
-                      {LLM_MODELS.map((m) => (
-                        <SelectItem key={m.value} value={m.value}>
-                          {m.label}
+                      {modelOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{option.label}</span>
+                            {option.description && (
+                              <span className="text-xs text-muted-foreground">{option.description}</span>
+                            )}
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -475,6 +502,23 @@ export default function Settings() {
                 <Button variant="outline" onClick={handleAdminReset}>
                   <RotateCcw className="h-4 w-4 mr-2" />
                   Reset
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => refreshModelsMutation.mutate()}
+                  disabled={refreshModelsMutation.isPending}
+                >
+                  {refreshModelsMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Refreshing...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Refresh Models from mor.org
+                    </>
+                  )}
                 </Button>
               </div>
             </div>

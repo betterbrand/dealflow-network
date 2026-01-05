@@ -77,6 +77,17 @@ async function startServer() {
     const { initializeDefaultSettings } = await import("../db-settings");
     await initializeDefaultSettings();
 
+    // Seed Anthropic models and refresh mor.org model cache
+    const { seedAnthropicModels, refreshModelCache } = await import("../services/model-service");
+    await seedAnthropicModels();
+
+    try {
+      await refreshModelCache();
+    } catch (error) {
+      console.warn("[Server] Failed to refresh model cache on startup:", error);
+      // Non-fatal: models will be fetched on first request
+    }
+
     // RDF store now uses lazy loading from database
     // Triples are loaded on first SPARQL query, not on startup
     // Set PRELOAD_RDF_STORE=true to preload for faster first query

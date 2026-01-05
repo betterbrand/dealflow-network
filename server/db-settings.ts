@@ -180,10 +180,12 @@ export async function initializeDefaultSettings(): Promise<void> {
   if (!db) return;
 
   const defaults = [
-    { key: "llm_default_model", value: JSON.stringify("gpt-4o-mini"), category: "llm", description: "Default LLM model" },
+    { key: "llm_default_model", value: JSON.stringify("auto"), category: "llm", description: "Default LLM model (auto = mor.org auto-select)" },
     { key: "llm_default_max_tokens", value: JSON.stringify(16384), category: "llm", description: "Maximum tokens per response" },
     { key: "llm_default_temperature", value: JSON.stringify(0.7), category: "llm", description: "Creativity level (0.0-1.0)" },
-    { key: "llm_default_api_url", value: JSON.stringify(""), category: "llm", description: "Custom API endpoint URL" },
+    { key: "llm_default_api_url", value: JSON.stringify("https://api.mor.org/api/v1/chat/completions"), category: "llm", description: "Primary API endpoint URL" },
+    { key: "llm_fallback_provider", value: JSON.stringify("anthropic"), category: "llm", description: "Fallback provider if primary fails" },
+    { key: "llm_anthropic_api_url", value: JSON.stringify("https://api.anthropic.com/v1/messages"), category: "llm", description: "Anthropic API endpoint" },
   ];
 
   for (const setting of defaults) {

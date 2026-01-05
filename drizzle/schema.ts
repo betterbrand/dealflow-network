@@ -1,4 +1,4 @@
-import { index, int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { index, int, json, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -597,3 +597,24 @@ export const userSettings = mysqlTable("userSettings", {
 
 export type UserSetting = typeof userSettings.$inferSelect;
 export type InsertUserSetting = typeof userSettings.$inferInsert;
+
+/**
+ * Available LLM Models - cached from provider APIs
+ */
+export const availableModels = mysqlTable("availableModels", {
+  id: int("id").autoincrement().primaryKey(),
+  provider: varchar("provider", { length: 50 }).notNull(), // "mor-org", "anthropic"
+  modelId: varchar("modelId", { length: 200 }).notNull().unique(),
+  displayName: varchar("displayName", { length: 200 }).notNull(),
+  description: text("description"),
+  contextWindow: int("contextWindow"),
+  pricing: json("pricing"), // { input: number, output: number }
+  capabilities: json("capabilities"), // { vision: bool, tools: bool, streaming: bool }
+  lastFetched: timestamp("lastFetched").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  providerIdx: index("idx_available_models_provider").on(table.provider),
+}));
+
+export type AvailableModel = typeof availableModels.$inferSelect;
+export type InsertAvailableModel = typeof availableModels.$inferInsert;

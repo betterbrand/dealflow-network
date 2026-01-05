@@ -1485,18 +1485,53 @@ export const appRouter = router({
         model: z.string(),
         apiUrl: z.string().optional(),
         apiKey: z.string().optional(),
+        testFallback: z.boolean().optional(),
       }))
       .mutation(async ({ input }) => {
         const { invokeLLM } = await import("./_core/llm");
         try {
           const result = await invokeLLM(
             { messages: [{ role: "user", content: "Test" }] },
-            { model: input.model, apiUrl: input.apiUrl, apiKey: input.apiKey, maxTokens: 10 }
+            {
+              model: input.model,
+              apiUrl: input.apiUrl,
+              apiKey: input.apiKey,
+              maxTokens: 10,
+              enableFallback: input.testFallback || false,
+            }
           );
-          return { success: true, model: result.model };
+
+          // Detect which provider was used based on model name
+          let provider = "unknown";
+          if (result.model.includes("claude")) {
+            provider = "anthropic";
+          } else if (input.apiUrl?.includes("mor.org")) {
+            provider = "mor-org";
+          } else if (input.apiUrl?.includes("anthropic")) {
+            provider = "anthropic";
+          } else {
+            provider = "mor-org"; // Default assumption
+          }
+
+          return { success: true, model: result.model, provider };
         } catch (error: any) {
           return { success: false, error: error.message };
         }
+      }),
+
+    getAvailableModels: protectedProcedure
+      .input(z.object({ provider: z.enum(["mor-org", "anthropic", "all"]).optional() }).optional())
+      .query(async ({ input }) => {
+        const { getCachedModels } = await import("./services/model-service");
+        const provider = input?.provider === "all" ? undefined : input?.provider;
+        return await getCachedModels(provider);
+      }),
+
+    refreshModels: adminProcedure
+      .mutation(async () => {
+        const { refreshModelCache } = await import("./services/model-service");
+        await refreshModelCache();
+        return { success: true, message: "Model cache refreshed" };
       }),
   }),
 });

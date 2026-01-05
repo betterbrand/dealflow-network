@@ -16,8 +16,11 @@ npm run test         # Run Vitest tests
 
 ### Database
 ```bash
-npm run db:push      # Generate and run Drizzle migrations
+npx drizzle-kit push  # Sync schema changes to database (recommended)
+npm run db:push       # Alternative: Generate and run migrations (may have state issues)
 ```
+
+**Important:** Use `npx drizzle-kit push` for schema changes. This directly syncs the schema to the database and handles table creation/modification interactively. When prompted about new tables/columns, select "create" for new additions.
 
 Database requires `DATABASE_URL` environment variable (MySQL connection string).
 
