@@ -31,6 +31,7 @@ export default function Settings() {
   const [adminMaxTokens, setAdminMaxTokens] = useState(16384);
   const [adminTemperature, setAdminTemperature] = useState(0.7);
   const [adminApiUrl, setAdminApiUrl] = useState("");
+  const [adminMorOrgApiKey, setAdminMorOrgApiKey] = useState("");
 
   // Fetch effective settings
   const { data: effectiveSettings } = trpc.settings.getEffectiveSettings.useQuery();
@@ -119,11 +120,13 @@ export default function Settings() {
       const tokensSetting = systemSettings.find((s) => s.key === "llm_default_max_tokens");
       const tempSetting = systemSettings.find((s) => s.key === "llm_default_temperature");
       const urlSetting = systemSettings.find((s) => s.key === "llm_default_api_url");
+      const morOrgApiKeySetting = systemSettings.find((s) => s.key === "llm_mor_org_api_key");
 
       if (modelSetting) setAdminModel(JSON.parse(modelSetting.value));
       if (tokensSetting) setAdminMaxTokens(JSON.parse(tokensSetting.value));
       if (tempSetting) setAdminTemperature(JSON.parse(tempSetting.value));
       if (urlSetting) setAdminApiUrl(JSON.parse(urlSetting.value));
+      if (morOrgApiKeySetting) setAdminMorOrgApiKey(JSON.parse(morOrgApiKeySetting.value));
     }
   }, [systemSettings]);
 
@@ -188,6 +191,10 @@ export default function Settings() {
         key: "llm_default_api_url",
         value: JSON.stringify(adminApiUrl),
       });
+      await updateSystemMutation.mutateAsync({
+        key: "llm_mor_org_api_key",
+        value: JSON.stringify(adminMorOrgApiKey),
+      });
     } catch (error) {
       // Error already handled by mutation
     }
@@ -232,11 +239,13 @@ export default function Settings() {
       const tokensSetting = systemSettings.find((s) => s.key === "llm_default_max_tokens");
       const tempSetting = systemSettings.find((s) => s.key === "llm_default_temperature");
       const urlSetting = systemSettings.find((s) => s.key === "llm_default_api_url");
+      const morOrgApiKeySetting = systemSettings.find((s) => s.key === "llm_mor_org_api_key");
 
       if (modelSetting) setAdminModel(JSON.parse(modelSetting.value));
       if (tokensSetting) setAdminMaxTokens(JSON.parse(tokensSetting.value));
       if (tempSetting) setAdminTemperature(JSON.parse(tempSetting.value));
       if (urlSetting) setAdminApiUrl(JSON.parse(urlSetting.value));
+      if (morOrgApiKeySetting) setAdminMorOrgApiKey(JSON.parse(morOrgApiKeySetting.value));
       toast.info("System defaults reset to current saved values");
     }
   };
@@ -490,6 +499,20 @@ export default function Settings() {
                   />
                   <p className="text-xs text-muted-foreground">
                     Leave empty to use the default OpenAI-compatible endpoint.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="adminMorOrgApiKey">mor.org API Key</Label>
+                  <Input
+                    id="adminMorOrgApiKey"
+                    type="password"
+                    placeholder="Enter your mor.org API key"
+                    value={adminMorOrgApiKey}
+                    onChange={(e) => setAdminMorOrgApiKey(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Primary inference provider. Get your API key from <a href="https://api.mor.org/docs" target="_blank" rel="noopener noreferrer" className="underline">api.mor.org</a>
                   </p>
                 </div>
               </div>

@@ -343,11 +343,26 @@ export async function invokeLLM(
   params: InvokeParams,
   options?: InvokeLLMOptions
 ): Promise<InvokeResult> {
+  // Load mor.org API key from system settings if not provided and not in ENV
+  let morOrgApiKey = options?.apiKey || ENV.morOrgApiKey;
+
+  if (!morOrgApiKey) {
+    try {
+      const { getSystemSettings } = await import("../db-settings");
+      const settings = await getSystemSettings("llm_mor_org_api_key");
+      if (settings.length > 0) {
+        morOrgApiKey = JSON.parse(settings[0].value);
+      }
+    } catch (error) {
+      // Fallback to ENV if system settings fail
+    }
+  }
+
   // Determine provider configuration
   const primaryProvider: ProviderConfig = {
     provider: "mor-org",
     apiUrl: options?.apiUrl || "https://api.mor.org/api/v1/chat/completions",
-    apiKey: options?.apiKey || ENV.morOrgApiKey,
+    apiKey: morOrgApiKey,
     model: options?.model || "auto",
   };
 
