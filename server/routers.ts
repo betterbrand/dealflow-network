@@ -1,7 +1,7 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { agentRouter } from "./routers/agent";
 
@@ -1434,6 +1434,71 @@ export const appRouter = router({
   }),
 
   agent: agentRouter,
+
+  settings: router({
+    // System settings (admin only)
+    getSystemSettings: adminProcedure
+      .input(z.object({ key: z.string().optional() }).optional())
+      .query(async ({ input }) => {
+        const { getSystemSettings } = await import("./db-settings");
+        return await getSystemSettings(input?.key);
+      }),
+
+    updateSystemSetting: adminProcedure
+      .input(z.object({ key: z.string(), value: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        const { updateSystemSetting } = await import("./db-settings");
+        return await updateSystemSetting(input.key, input.value, ctx.user.id);
+      }),
+
+    // User settings
+    getUserSettings: protectedProcedure
+      .input(z.object({ key: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        const { getUserSettings } = await import("./db-settings");
+        return await getUserSettings(ctx.user.id, input?.key);
+      }),
+
+    updateUserSetting: protectedProcedure
+      .input(z.object({ key: z.string(), value: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        const { updateUserSetting } = await import("./db-settings");
+        return await updateUserSetting(ctx.user.id, input.key, input.value);
+      }),
+
+    deleteUserSetting: protectedProcedure
+      .input(z.object({ key: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        const { deleteUserSetting } = await import("./db-settings");
+        await deleteUserSetting(ctx.user.id, input.key);
+        return { success: true };
+      }),
+
+    getEffectiveSettings: protectedProcedure
+      .query(async ({ ctx }) => {
+        const { getEffectiveSettings } = await import("./db-settings");
+        return await getEffectiveSettings(ctx.user.id);
+      }),
+
+    testLLMConnection: protectedProcedure
+      .input(z.object({
+        model: z.string(),
+        apiUrl: z.string().optional(),
+        apiKey: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { invokeLLM } = await import("./_core/llm");
+        try {
+          const result = await invokeLLM(
+            { messages: [{ role: "user", content: "Test" }] },
+            { model: input.model, apiUrl: input.apiUrl, apiKey: input.apiKey, maxTokens: 10 }
+          );
+          return { success: true, model: result.model };
+        } catch (error: any) {
+          return { success: false, error: error.message };
+        }
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

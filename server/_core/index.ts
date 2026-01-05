@@ -73,6 +73,10 @@ async function startServer() {
   server.listen(port, async () => {
     console.log(`Server running on http://localhost:${port}/`);
 
+    // Initialize default system settings
+    const { initializeDefaultSettings } = await import("../db-settings");
+    await initializeDefaultSettings();
+
     // RDF store now uses lazy loading from database
     // Triples are loaded on first SPARQL query, not on startup
     // Set PRELOAD_RDF_STORE=true to preload for faster first query

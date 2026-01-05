@@ -7,7 +7,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { APP_LOGO, APP_TITLE } from "@/const";
 import {
   Building2, LayoutDashboard, LogOut, Network, PanelLeft,
-  Users, Lightbulb, Sparkles, Shield
+  Users, Lightbulb, Sparkles, Settings, Shield
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +18,7 @@ const menuItems = [
   { icon: Network, label: "Knowledge Graph", path: "/graph" },
   { icon: Lightbulb, label: "Suggestions", path: "/suggestions" },
   { icon: Sparkles, label: "AI Query", path: "/ai-query" },
+  { icon: Settings, label: "Settings", path: "/settings" },
   { icon: Shield, label: "Admin Users", path: "/admin/users" },
 ];
 
