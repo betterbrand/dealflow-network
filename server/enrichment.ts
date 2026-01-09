@@ -26,9 +26,10 @@ export async function enrichContact(
   for (const profile of socialProfiles) {
     try {
       let platformData: EnrichedProfile;
-      
+
       if (profile.platform === "linkedin") {
-        platformData = await enrichLinkedInProfile(profile.url);
+        // Pass contactId as userId to enable triple persistence
+        platformData = await enrichLinkedInProfile(profile.url, { userId: contactId });
       } else if (profile.platform === "twitter" || profile.platform === "x") {
         platformData = await enrichTwitterProfile(profile.url);
       } else {

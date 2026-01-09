@@ -1,7 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Mail, Phone, MapPin, Building2, Calendar, User, Linkedin, Twitter, Plus, ExternalLink, Briefcase, GraduationCap, FileText, Users, Download, RefreshCw, Loader2, CheckCircle, XCircle, Lightbulb, Trash2, Database, ChevronDown, ChevronUp, Lock } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, Building2, Calendar, User, Linkedin, Twitter, Plus, ExternalLink, Briefcase, GraduationCap, FileText, Users, Download, RefreshCw, Loader2, CheckCircle, XCircle, Lightbulb, Trash2, Database, ChevronDown, ChevronUp, Lock, Sparkles, TrendingUp, Target, Zap, MessageCircle } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,6 +46,7 @@ export default function ContactDetail() {
   const [importCompany, setImportCompany] = useState(false);
   const [showSemanticData, setShowSemanticData] = useState(false);
   const [showRequestAccessDialog, setShowRequestAccessDialog] = useState(false);
+  const [showTwitterInsights, setShowTwitterInsights] = useState(false);
 
   const utils = trpc.useUtils();
   const { data: contact, isLoading, refetch } = trpc.contacts.get.useQuery({ id: contactId });
@@ -59,6 +60,19 @@ export default function ContactDetail() {
     { contactId },
     { enabled: showSemanticData && contactId > 0 }
   );
+
+  // Twitter analysis queries
+  const { data: twitterProviderAvailable } = trpc.contacts.isTwitterProviderAvailable.useQuery();
+  const { data: twitterAnalysis, refetch: refetchTwitterAnalysis } = trpc.contacts.getTwitterAnalysis.useQuery(
+    { contactId },
+    { enabled: showTwitterInsights && contactId > 0 }
+  );
+  const analyzeTwitterMutation = trpc.contacts.analyzeTwitter.useMutation({
+    onSuccess: () => {
+      refetchTwitterAnalysis();
+      refetch();
+    },
+  });
 
   const getImportPreviewMutation = trpc.contacts.getImportPreview.useMutation();
   const confirmImportMutation = trpc.contacts.confirmImport.useMutation();
@@ -864,6 +878,261 @@ export default function ContactDetail() {
               </CardContent>
             )}
           </Card>
+
+          {/* Twitter Insights */}
+          {(contact.twitterUrl || ('twitterUsername' in contact && contact.twitterUsername)) && (
+            <Card>
+              <CardHeader className="pb-3">
+                <button
+                  onClick={() => setShowTwitterInsights(!showTwitterInsights)}
+                  className="flex items-center justify-between w-full text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <Twitter className="h-4 w-4" />
+                    <CardTitle className="text-base">Twitter Insights</CardTitle>
+                    {twitterAnalysis && (
+                      <Badge
+                        variant="secondary"
+                        className={`text-xs ${
+                          twitterAnalysis.overallSentiment === 'positive' ? 'bg-green-100 text-green-800' :
+                          twitterAnalysis.overallSentiment === 'negative' ? 'bg-red-100 text-red-800' :
+                          twitterAnalysis.overallSentiment === 'mixed' ? 'bg-yellow-100 text-yellow-800' :
+                          ''
+                        }`}
+                      >
+                        {twitterAnalysis.overallSentiment}
+                      </Badge>
+                    )}
+                  </div>
+                  {showTwitterInsights ? (
+                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </button>
+              </CardHeader>
+              {showTwitterInsights && (
+                <CardContent className="pt-0 space-y-4">
+                  {twitterAnalysis ? (
+                    <>
+                      {/* Influence Score */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                            <TrendingUp className="h-3 w-3" />
+                            Influence
+                          </span>
+                          <span className="text-sm font-semibold">{twitterAnalysis.influenceScore}/100</span>
+                        </div>
+                        <div className="w-full bg-muted rounded-full h-2">
+                          <div
+                            className="bg-primary h-2 rounded-full transition-all"
+                            style={{ width: `${twitterAnalysis.influenceScore}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Communication Style */}
+                      {twitterAnalysis.communicationStyle && (
+                        <div className="space-y-1">
+                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                            <MessageCircle className="h-3 w-3" />
+                            Style
+                          </span>
+                          <Badge variant="outline" className="capitalize">
+                            {twitterAnalysis.communicationStyle.replace('_', ' ')}
+                          </Badge>
+                        </div>
+                      )}
+
+                      {/* Topics */}
+                      {twitterAnalysis.topics && (() => {
+                        const topics = typeof twitterAnalysis.topics === 'string'
+                          ? JSON.parse(twitterAnalysis.topics)
+                          : twitterAnalysis.topics;
+                        return topics.length > 0 ? (
+                          <div className="space-y-1">
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                              Topics
+                            </span>
+                            <div className="flex flex-wrap gap-1">
+                              {topics.slice(0, 5).map((t: any, idx: number) => (
+                                <Badge key={idx} variant="secondary" className="text-xs">
+                                  {typeof t === 'string' ? t : t.topic}
+                                </Badge>
+                              ))}
+                              {topics.length > 5 && (
+                                <Badge variant="outline" className="text-xs">
+                                  +{topics.length - 5}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        ) : null;
+                      })()}
+
+                      {/* Capabilities */}
+                      {twitterAnalysis.capabilities && (() => {
+                        const capabilities = typeof twitterAnalysis.capabilities === 'string'
+                          ? JSON.parse(twitterAnalysis.capabilities)
+                          : twitterAnalysis.capabilities;
+                        return capabilities.length > 0 ? (
+                          <div className="space-y-1">
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                              <Zap className="h-3 w-3" />
+                              Can Help With
+                            </span>
+                            <div className="space-y-1">
+                              {capabilities.slice(0, 3).map((cap: any, idx: number) => (
+                                <div key={idx} className="text-sm flex items-center gap-2">
+                                  <span className="w-1 h-1 rounded-full bg-green-500" />
+                                  {typeof cap === 'string' ? cap : cap.name}
+                                </div>
+                              ))}
+                              {capabilities.length > 3 && (
+                                <div className="text-xs text-muted-foreground">
+                                  +{capabilities.length - 3} more
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ) : null;
+                      })()}
+
+                      {/* Needs */}
+                      {twitterAnalysis.needs && (() => {
+                        const needs = typeof twitterAnalysis.needs === 'string'
+                          ? JSON.parse(twitterAnalysis.needs)
+                          : twitterAnalysis.needs;
+                        return needs.length > 0 ? (
+                          <div className="space-y-1">
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                              <Target className="h-3 w-3" />
+                              Looking For
+                            </span>
+                            <div className="space-y-1">
+                              {needs.slice(0, 3).map((need: any, idx: number) => (
+                                <div key={idx} className="text-sm flex items-center gap-2">
+                                  <span className={`w-1 h-1 rounded-full ${
+                                    need.urgency === 'high' ? 'bg-red-500' :
+                                    need.urgency === 'medium' ? 'bg-yellow-500' :
+                                    'bg-blue-500'
+                                  }`} />
+                                  {typeof need === 'string' ? need : need.name}
+                                </div>
+                              ))}
+                              {needs.length > 3 && (
+                                <div className="text-xs text-muted-foreground">
+                                  +{needs.length - 3} more
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ) : null;
+                      })()}
+
+                      {/* Opportunities */}
+                      {twitterAnalysis.opportunities && (() => {
+                        const opportunities = typeof twitterAnalysis.opportunities === 'string'
+                          ? JSON.parse(twitterAnalysis.opportunities)
+                          : twitterAnalysis.opportunities;
+                        return opportunities.length > 0 ? (
+                          <div className="space-y-1">
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                              <Lightbulb className="h-3 w-3" />
+                              Opportunities
+                            </span>
+                            <div className="space-y-2">
+                              {opportunities.slice(0, 2).map((opp: any, idx: number) => (
+                                <div key={idx} className="text-sm p-2 bg-amber-50 dark:bg-amber-950/20 rounded border border-amber-200 dark:border-amber-800">
+                                  <div className="font-medium text-amber-900 dark:text-amber-100">
+                                    {typeof opp === 'string' ? opp : opp.title}
+                                  </div>
+                                  {opp.description && (
+                                    <div className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                                      {opp.description}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                              {opportunities.length > 2 && (
+                                <div className="text-xs text-muted-foreground">
+                                  +{opportunities.length - 2} more opportunities
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ) : null;
+                      })()}
+
+                      <Separator />
+
+                      {/* Last Analyzed */}
+                      {twitterAnalysis.lastAnalyzedAt && (
+                        <div className="text-xs text-muted-foreground text-center">
+                          Last analyzed: {new Date(twitterAnalysis.lastAnalyzedAt).toLocaleDateString()}
+                        </div>
+                      )}
+
+                      {/* Re-analyze Button */}
+                      {twitterProviderAvailable && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                          onClick={() => analyzeTwitterMutation.mutate({ contactId, tweetCount: 50 })}
+                          disabled={analyzeTwitterMutation.isPending}
+                        >
+                          {analyzeTwitterMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                              Analyzing...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="mr-2 h-3 w-3" />
+                              Refresh Analysis
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-center space-y-3">
+                      <div className="text-sm text-muted-foreground">
+                        No Twitter analysis yet.
+                      </div>
+                      {twitterProviderAvailable ? (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="w-full"
+                          onClick={() => analyzeTwitterMutation.mutate({ contactId, tweetCount: 50 })}
+                          disabled={analyzeTwitterMutation.isPending}
+                        >
+                          {analyzeTwitterMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                              Analyzing tweets...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="mr-2 h-3 w-3" />
+                              Analyze Tweets
+                            </>
+                          )}
+                        </Button>
+                      ) : (
+                        <div className="text-xs text-muted-foreground">
+                          Configure Apify API key to enable analysis.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              )}
+            </Card>
+          )}
         </div>
       </div>
 

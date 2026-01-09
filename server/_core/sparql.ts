@@ -507,8 +507,8 @@ export async function initializeRdfStoreFromDatabase(): Promise<void> {
           }
         );
 
-        // Load into RDF store
-        await loadSemanticGraph(semanticGraph);
+        // Load into RDF store (pass contactId to persist to database)
+        await loadSemanticGraph(semanticGraph, contact.id);
         return { success: true };
       } catch (error) {
         console.error(`[SPARQL] Failed to load contact ${contact.id}:`, error);

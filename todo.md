@@ -41,10 +41,10 @@
 - [x] Implement Twitter profile scraping/fetching
 - [x] Parse and extract additional data (job history, skills, connections)
 - [x] Update contact records with enriched data asynchronously
-- [x] Implement enrichment adapter with Manus LinkedIn API
+- [x] Implement enrichment adapter with LinkedIn API
 - [x] Test enrichment adapter with real LinkedIn profiles
-- [ ] Add ASIMOV semantic transformation (RDF/JSON-LD) for knowledge graph
-- [ ] Implement Twitter enrichment via Manus API
+- [x] Add ASIMOV semantic transformation (RDF/JSON-LD) for knowledge graph
+- [ ] Implement Twitter enrichment via Apify
 
 ## Phase 6: Frontend - Dashboard & Layout
 - [x] Design color scheme and typography
@@ -115,7 +115,6 @@
 - [ ] Web form for manual contact entry
 - [ ] Spreadsheet import
 - [ ] Email integration
-- [ ] LinkedIn scraping
 - [ ] Calendar integration
 - [ ] Automated follow-up reminders
 - [ ] Deal pipeline stages
@@ -132,7 +131,7 @@
 ## Technical Debt - Temporary Solutions
 - [ ] **FOR ELECTRON VERSION**: Implement pure ASIMOV+Bright Data integration
   - Location: `server/enrichment-adapter.ts`
-  - Current: Using Manus LinkedIn API for web MVP (serverless can't run Rust binaries)
+  - Current: Using Scrapingdog/Apify for web MVP
   - Future: Bundle ASIMOV Rust binaries with Electron app for offline operation
   - The adapter pattern is ready - just need to bundle binaries and set USE_PURE_ASIMOV=true
   - Test: `server/test-asimov-brightdata.ts` (will work in Electron with bundled binaries)
@@ -142,7 +141,7 @@
 ## Bug Fixes
 - [x] Fix knowledge graph visualization - currently showing empty graph despite having contacts in database
 
-- [ ] Investigate and fix: Published site (dealflownet-xrj2t4w7.manus.space/graph) not showing graph visualization despite checkpoint a1113141 being published (waiting for Manus support to fix git sync issue)
+- [ ] Investigate and fix: Published site not showing graph visualization (deployment sync issue)
 
 ## Phase 10: Relationship Creation UI
 - [x] Create tRPC procedures for relationship CRUD operations
@@ -272,8 +271,44 @@
 - [x] Add automatic enrichment on URL submission
 - [x] Show loading state during enrichment
 - [x] Display enriched data for user review/edit
-- [ ] Add X/Twitter profile enrichment service (similar to LinkedIn)
 - [x] Update UI to clearly indicate import-first workflow
+
+## Twitter Integration & Semantic Expansion
+### Phase A: Twitter Implementation
+- [ ] Add `twitterAnalysis` table with LLM-derived insights (sentiment, capabilities, needs, opportunities)
+- [ ] Add Twitter fields to contacts table (username, bio, followers, verified, etc.)
+- [ ] Create `server/_core/twitter-provider.ts` with Apify integration
+- [ ] Add `transformTwitterToSemanticGraph()` to semantic transformer
+- [ ] Add `extendGraphWithAnalysis()` for capability/need/opportunity entities
+- [ ] Create `server/services/twitter-analysis.service.ts` for LLM-powered tweet analysis
+- [ ] Add `getTwitterImportPreview` tRPC endpoint
+- [ ] Add `confirmTwitterImport` tRPC endpoint
+- [ ] Add `analyzeTwitter` tRPC endpoint (on-demand tweet analysis)
+- [ ] Add `getTwitterAnalysis` tRPC endpoint
+- [ ] Build Twitter Insights card on contact detail page (sentiment, influence, topics)
+- [ ] Add "Analyze Tweets" button with loading state
+- [ ] Add Twitter import dialog (similar to LinkedIn flow)
+
+### Phase B: LinkedIn Relationship Extraction
+- [ ] Create `server/services/inferred-edges.service.ts` for relationship inference
+- [ ] Implement colleague inference from overlapping work experience
+- [ ] Implement alumni network detection from education data
+- [ ] Add skill-based connection suggestions
+- [ ] Enhance `peopleAlsoViewed` processing with bidirectional strength
+
+### Phase C: Cross-Platform Identity Linking
+- [ ] Implement same-person detection (name+company, bio links, website URL)
+- [ ] Add user-driven matching UI on import (conservative/moderate/aggressive)
+- [ ] Create unified Person entities with `sameAs` links
+- [ ] Build cross-platform profile badges in contact detail
+
+### Phase D: SPARQL Network Matching Queries
+- [ ] Add `getPeopleWithCapability(capability)` query
+- [ ] Add `getPeopleWithNeed(need)` query
+- [ ] Add `matchCapabilitiesToNeeds()` for "who can help whom"
+- [ ] Add `getColleagues(personId)` query
+- [ ] Add `getAlumni(school)` query
+- [ ] Add `getInfluenceLeaders(topic)` query
 
 
 ## Graph Zoom Adjustment
@@ -465,9 +500,9 @@
 ### Phase 2: Backend Integration
 - [ ] Install Auth0 SDK dependencies (`express-oauth2-jwt-bearer`, `auth0`)
 - [ ] Create Auth0 middleware for JWT validation
-- [ ] Replace Manus OAuth callback with Auth0 callback handler
+- [ ] Replace magic link auth with Auth0 callback handler
 - [ ] Update session management to use Auth0 tokens
-- [ ] Migrate user identification from Manus openId to Auth0 sub
+- [ ] Migrate user identification to Auth0 sub
 - [ ] Update `protectedProcedure` to validate Auth0 JWTs
 - [ ] Create user sync logic (Auth0 → local database)
 - [ ] Add Auth0 Management API integration for user operations
@@ -480,7 +515,7 @@
 - [ ] Replace useAuth hook with Auth0's useAuth0 hook
 - [ ] Update login button to use Auth0's loginWithRedirect
 - [ ] Update logout to use Auth0's logout method
-- [ ] Remove Manus OAuth portal references
+- [ ] Remove magic link auth references
 - [ ] Update DashboardLayout to use Auth0 user object
 - [ ] Handle Auth0 loading states and errors
 - [ ] Test authentication flow end-to-end
@@ -488,9 +523,9 @@
 
 ### Phase 4: Data Migration
 - [ ] Create migration script to map existing users
-- [ ] Export current user data (openId, email, name)
+- [ ] Export current user data (email, name)
 - [ ] Import users to Auth0 via Management API or bulk import
-- [ ] Map Manus openId to Auth0 sub in database
+- [ ] Map existing users to Auth0 sub in database
 - [ ] Test user login with migrated accounts
 - [ ] Verify all user-specific data (contacts, notes) still accessible
 - [ ] Create rollback plan in case of issues
@@ -502,8 +537,8 @@
 - [ ] Test protected routes and API endpoints
 - [ ] Verify user permissions and role-based access
 - [ ] Test on multiple browsers and devices
-- [ ] Remove all Manus OAuth code from server/_core/oauth.ts
-- [ ] Remove Manus OAuth environment variables
+- [ ] Remove magic link auth code
+- [ ] Update environment variables for Auth0
 - [ ] Update documentation with Auth0 setup instructions
 - [ ] Save checkpoint after successful migration
 
@@ -517,11 +552,10 @@
 - [ ] Document Auth0 admin procedures for team
 
 ### Considerations & Notes
-- **Estimated Time:** 1-2 days for full implementation and testing
 - **Cost:** Auth0 free tier (7,500 MAU), then $35/month (Essentials) or $240/month (Professional)
 - **Custom Domain:** Requires Auth0 Essentials plan or higher for white-label auth.yourdomain.com
 - **User Migration:** Can use Auth0's automatic migration feature to migrate users on first login
-- **Rollback:** Keep Manus OAuth code in git history for 30 days in case rollback needed
+- **Rollback:** Keep magic link auth code in git history in case rollback needed
 - **Alternative:** Consider Clerk if faster implementation and modern DX preferred over Auth0's enterprise features
 
 

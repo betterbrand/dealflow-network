@@ -94,6 +94,21 @@ export const contacts = mysqlTable("contacts", {
   
   // Imported data from LinkedIn/Twitter (shared)
   twitterUrl: varchar("twitterUrl", { length: 500 }),
+
+  // === Twitter-specific fields ===
+  twitterUsername: varchar("twitterUsername", { length: 50 }),
+  twitterId: varchar("twitterId", { length: 50 }),
+  twitterBio: text("twitterBio"),
+  twitterFollowers: int("twitterFollowers"),
+  twitterFollowing: int("twitterFollowing"),
+  twitterTweetCount: int("twitterTweetCount"),
+  twitterVerified: int("twitterVerified").default(0), // 0 = not verified, 1 = verified
+  twitterProfileImageUrl: text("twitterProfileImageUrl"),
+  twitterBannerUrl: text("twitterBannerUrl"),
+  twitterJoinedAt: timestamp("twitterJoinedAt"),
+  twitterLocation: varchar("twitterLocation", { length: 255 }),
+  twitterWebsite: varchar("twitterWebsite", { length: 500 }),
+
   summary: text("summary"),
   profilePictureUrl: text("profilePictureUrl"),
   photoUrl: text("photoUrl"), // Deprecated, use profilePictureUrl
@@ -151,6 +166,8 @@ export const contacts = mysqlTable("contacts", {
 }, (table) => ({
   emailIdx: index("idx_contacts_email").on(table.email),
   linkedinUrlIdx: index("idx_contacts_linkedin").on(table.linkedinUrl),
+  twitterUrlIdx: index("idx_contacts_twitter").on(table.twitterUrl),
+  twitterUsernameIdx: index("idx_contacts_twitter_username").on(table.twitterUsername),
   createdByIdx: index("idx_contacts_created_by").on(table.createdBy),
   isPrivateIdx: index("idx_contacts_is_private").on(table.isPrivate),
   createdByPrivateIdx: index("idx_contacts_created_private").on(table.createdBy, table.isPrivate),
@@ -158,6 +175,56 @@ export const contacts = mysqlTable("contacts", {
 
 export type Contact = typeof contacts.$inferSelect;
 export type InsertContact = typeof contacts.$inferInsert;
+
+/**
+ * Twitter Analysis table - stores LLM-derived insights from tweet analysis
+ * Enables semantic network matching (capabilities, needs, opportunities)
+ */
+export const twitterAnalysis = mysqlTable("twitterAnalysis", {
+  id: int("id").autoincrement().primaryKey(),
+  contactId: int("contactId").notNull().references(() => contacts.id, { onDelete: "cascade" }),
+
+  // Analysis scope
+  tweetCount: int("tweetCount").default(0), // Number of tweets analyzed
+  analyzedTweetIds: text("analyzedTweetIds"), // JSON array of tweet IDs included in analysis
+
+  // Sentiment analysis
+  overallSentiment: varchar("overallSentiment", { length: 20 }), // "positive", "neutral", "negative", "mixed"
+  sentimentScore: int("sentimentScore"), // -100 to +100
+
+  // Semantic entities for network matching (JSON arrays)
+  opportunities: text("opportunities"), // JSON: [{ title, description, type, confidence }]
+  goals: text("goals"), // JSON: [{ goal, timeframe, context }]
+  topics: text("topics"), // JSON: [{ topic, frequency, sentiment }]
+  capabilities: text("capabilities"), // JSON: [{ name, confidence, evidence }]
+  needs: text("needs"), // JSON: [{ name, urgency, context }]
+
+  // Communication profile
+  communicationStyle: varchar("communicationStyle", { length: 50 }), // "professional", "casual", "technical", "promotional"
+  personalityTraits: text("personalityTraits"), // JSON: [{ trait, confidence }]
+
+  // Influence metrics
+  influenceScore: int("influenceScore"), // 0-100 overall influence rating
+  influenceTopics: text("influenceTopics"), // JSON: [{ topic, score }] - topics where they're influential
+
+  // Engagement patterns
+  engagementPattern: text("engagementPattern"), // JSON: { avgLikes, avgRetweets, avgReplies, postingFrequency }
+
+  // Metadata
+  lastAnalyzedAt: timestamp("lastAnalyzedAt").defaultNow(),
+  analysisVersion: varchar("analysisVersion", { length: 20 }).default("1.0"), // For schema evolution
+  rawAnalysis: text("rawAnalysis"), // Full LLM response for debugging
+
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  contactIdx: index("idx_twitter_analysis_contact").on(table.contactId),
+  sentimentIdx: index("idx_twitter_analysis_sentiment").on(table.overallSentiment),
+  influenceIdx: index("idx_twitter_analysis_influence").on(table.influenceScore),
+}));
+
+export type TwitterAnalysis = typeof twitterAnalysis.$inferSelect;
+export type InsertTwitterAnalysis = typeof twitterAnalysis.$inferInsert;
 
 /**
  * User-Contact junction table - tracks which users know which contacts

@@ -132,9 +132,10 @@ export async function enrichLinkedInProfile(
     const parsed = parseSemanticGraph(semanticGraph);
 
     // Load semantic graph into RDF triple store for SPARQL queries
+    // Pass userId (which is the contactId) to persist triples to database
     try {
-      await loadSemanticGraph(semanticGraph);
-      console.log("[Enrichment] Loaded semantic graph into RDF store");
+      await loadSemanticGraph(semanticGraph, options.userId);
+      console.log("[Enrichment] Loaded semantic graph into RDF store", options.userId ? `for contact ${options.userId}` : "");
     } catch (error) {
       console.error("[Enrichment] Failed to load semantic graph into RDF store:", error);
       // Continue without RDF store - basic enrichment still works

@@ -91,7 +91,14 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .query(async ({ input, ctx }) => {
         const { getUserContact } = await import("./db-collaborative");
-        return await getUserContact(ctx.user.id, input.id);
+        const { getContactById } = await import("./db");
+
+        // Try user-specific contact first
+        const userContact = await getUserContact(ctx.user.id, input.id);
+        if (userContact) return userContact;
+
+        // Fall back to raw contact data (for shared contacts user hasn't linked)
+        return await getContactById(input.id);
       }),
 
     getMetadata: protectedProcedure
@@ -593,14 +600,10 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    // Stub endpoints for import provider system (exists on main, not on this branch)
-    getAvailableProviders: protectedProcedure.query(async (): Promise<Array<{
-      id: string;
-      name: string;
-      speed: 'fast' | 'slow';
-    }>> => {
-      // Return empty list - this feature exists on main
-      return [];
+    // LinkedIn import provider endpoints
+    getAvailableProviders: protectedProcedure.query(async () => {
+      const { getAvailableProviders } = await import("./_core/linkedin-provider");
+      return getAvailableProviders();
     }),
 
     getImportPreview: protectedProcedure
@@ -610,10 +613,29 @@ export const appRouter = router({
         linkedinUrl: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        // Stub - return empty preview
+        if (!input.linkedinUrl) {
+          throw new Error("LinkedIn URL is required");
+        }
+
+        const { importLinkedInProfile } = await import("./import-adapter");
+        const provider = input.provider as 'brightdata' | 'scrapingdog';
+
+        // Fetch the profile data
+        const profile = await importLinkedInProfile(input.linkedinUrl, { provider });
+
+        // Return preview data with _rawData for confirmImport
         return {
-          contacts: [],
-          provider: input.provider,
+          name: profile.name,
+          firstName: profile.firstName,
+          lastName: profile.lastName,
+          headline: profile.headline,
+          location: profile.location,
+          currentRole: profile.position || profile.experience?.[0]?.title,
+          currentCompany: profile.currentCompanyName || profile.experience?.[0]?.company,
+          profilePictureUrl: profile.profilePictureUrl,
+          followers: profile.followers,
+          connections: profile.connections,
+          _rawData: profile, // Full profile for confirmImport
         };
       }),
 
@@ -626,11 +648,470 @@ export const appRouter = router({
         importCompany: z.boolean().optional(),
         linkedinUrl: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
-        // Stub - return success with no imports
+      .mutation(async ({ input, ctx }) => {
+        if (!input.contactId || !input.importData) {
+          throw new Error("Contact ID and import data are required");
+        }
+
+        const { updateContact, getContactById } = await import("./db");
+        const { loadSemanticGraph } = await import("./_core/sparql");
+        const profile = input.importData;
+
+        // Update the contact with imported data
+        await updateContact(input.contactId, {
+          // Core identity
+          name: profile.name,
+          firstName: profile.firstName,
+          lastName: profile.lastName,
+          linkedinId: profile.linkedinId,
+          linkedinNumId: profile.linkedinNumId,
+
+          // Professional
+          role: profile.position || profile.headline || profile.experience?.[0]?.title,
+          company: profile.currentCompanyName || profile.experience?.[0]?.company,
+
+          // Location
+          location: profile.location,
+          city: profile.city,
+          countryCode: profile.countryCode,
+
+          // Bio
+          summary: profile.summary || profile.about,
+
+          // LinkedIn URL
+          linkedinUrl: input.linkedinUrl,
+
+          // Visual Assets
+          profilePictureUrl: profile.profilePictureUrl,
+          bannerImageUrl: profile.bannerImage,
+
+          // Social Proof
+          followers: profile.followers,
+          connections: profile.connections,
+
+          // JSON fields
+          experience: profile.experience ? JSON.stringify(profile.experience) : undefined,
+          education: profile.education ? JSON.stringify(profile.education) : undefined,
+          skills: profile.skills ? JSON.stringify(profile.skills) : undefined,
+          bioLinks: profile.bioLinks ? JSON.stringify(profile.bioLinks) : undefined,
+          posts: profile.posts ? JSON.stringify(profile.posts) : undefined,
+          activity: profile.activity ? JSON.stringify(profile.activity) : undefined,
+          peopleAlsoViewed: profile.peopleAlsoViewed ? JSON.stringify(profile.peopleAlsoViewed) : undefined,
+
+          // Import metadata
+          lastImportedAt: new Date(),
+          importSource: input.provider,
+          importStatus: 'complete',
+        });
+
+        // Save semantic graph triples if available
+        if (profile.semanticGraph) {
+          try {
+            await loadSemanticGraph(profile.semanticGraph, input.contactId);
+            console.log(`[confirmImport] Saved semantic triples for contact ${input.contactId}`);
+          } catch (error) {
+            console.error(`[confirmImport] Failed to save semantic triples:`, error);
+          }
+        }
+
+        // Compute inferred edges for the network graph
+        try {
+          const { computeInferredEdgesForContact } = await import("./services/inferred-edges.service");
+          const edgesCreated = await computeInferredEdgesForContact(input.contactId);
+          console.log(`[confirmImport] Created ${edgesCreated} inferred edges for contact ${input.contactId}`);
+        } catch (edgeError) {
+          console.warn(`[confirmImport] Failed to compute inferred edges:`, edgeError);
+        }
+
         return {
           success: true,
-          importedCount: 0,
+          importedCount: 1,
+        };
+      }),
+
+    // ============================================================================
+    // Twitter Import & Analysis Endpoints
+    // ============================================================================
+
+    /**
+     * Get available Twitter provider info
+     */
+    isTwitterProviderAvailable: protectedProcedure.query(async () => {
+      const { isTwitterProviderAvailable } = await import("./_core/twitter-provider");
+      return {
+        available: isTwitterProviderAvailable(),
+        provider: "apify",
+      };
+    }),
+
+    /**
+     * Preview Twitter profile before import
+     */
+    getTwitterImportPreview: protectedProcedure
+      .input(z.object({
+        twitterUrl: z.string().min(1),
+      }))
+      .mutation(async ({ input }) => {
+        const { fetchTwitterProfile, extractUsernameFromUrl, buildTwitterUrl } = await import("./_core/twitter-provider");
+        const { isTwitterProviderAvailable } = await import("./_core/twitter-provider");
+        const { TRPCError } = await import("@trpc/server");
+
+        if (!isTwitterProviderAvailable()) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Twitter provider not configured. Set APIFY_API_KEY environment variable.",
+          });
+        }
+
+        try {
+          const username = extractUsernameFromUrl(input.twitterUrl);
+          const profile = await fetchTwitterProfile(input.twitterUrl);
+
+          return {
+            username: profile.username,
+            name: profile.name,
+            bio: profile.bio,
+            location: profile.location,
+            website: profile.website,
+            followers: profile.followersCount,
+            following: profile.followingCount,
+            tweetCount: profile.tweetCount,
+            verified: profile.verified,
+            profileImageUrl: profile.profileImageUrl,
+            bannerUrl: profile.bannerUrl,
+            createdAt: profile.createdAt,
+            twitterUrl: buildTwitterUrl(profile.username),
+            _rawProfile: profile,
+          };
+        } catch (error: any) {
+          console.error("[Twitter Import] Preview failed:", error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: error.message || "Failed to fetch Twitter profile",
+          });
+        }
+      }),
+
+    /**
+     * Confirm Twitter import - save profile data to contact
+     */
+    confirmTwitterImport: protectedProcedure
+      .input(z.object({
+        contactId: z.number().positive(),
+        twitterUrl: z.string().min(1),
+        profile: z.object({
+          username: z.string(),
+          name: z.string(),
+          bio: z.string().nullable(),
+          location: z.string().nullable(),
+          website: z.string().nullable(),
+          followers: z.number(),
+          following: z.number(),
+          tweetCount: z.number(),
+          verified: z.boolean(),
+          profileImageUrl: z.string().nullable(),
+          bannerUrl: z.string().nullable(),
+          createdAt: z.string().nullable(),
+        }),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { updateContact, getContactById } = await import("./db");
+        const { getDb } = await import("./db");
+        const { socialProfiles } = await import("../drizzle/schema");
+        const { transformTwitterToSemanticGraph } = await import("./_core/semantic-transformer");
+        const { loadSemanticGraph } = await import("./_core/sparql");
+        const { buildTwitterUrl } = await import("./_core/twitter-provider");
+        const { TRPCError } = await import("@trpc/server");
+
+        const db = await getDb();
+        if (!db) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Database connection failed",
+          });
+        }
+
+        // Verify contact exists
+        const contact = await getContactById(input.contactId);
+        if (!contact) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Contact not found",
+          });
+        }
+
+        const twitterUrl = buildTwitterUrl(input.profile.username);
+
+        // Update contact with Twitter data
+        await updateContact(input.contactId, {
+          twitterUrl,
+          twitterUsername: input.profile.username,
+          twitterBio: input.profile.bio,
+          twitterFollowers: input.profile.followers,
+          twitterFollowing: input.profile.following,
+          twitterTweetCount: input.profile.tweetCount,
+          twitterVerified: input.profile.verified ? 1 : 0,
+          twitterProfileImageUrl: input.profile.profileImageUrl,
+          twitterBannerUrl: input.profile.bannerUrl,
+          twitterJoinedAt: input.profile.createdAt ? new Date(input.profile.createdAt) : null,
+          twitterLocation: input.profile.location,
+          twitterWebsite: input.profile.website,
+        });
+
+        // Add to social profiles table
+        try {
+          await db.insert(socialProfiles).values({
+            contactId: input.contactId,
+            platform: "twitter",
+            url: twitterUrl,
+            profileData: JSON.stringify(input.profile),
+            lastImported: new Date(),
+          });
+        } catch (error) {
+          // Ignore duplicate entry errors
+          console.warn("[Twitter Import] Social profile insert error (may be duplicate):", error);
+        }
+
+        // Generate and save semantic graph
+        try {
+          const semanticGraph = transformTwitterToSemanticGraph(
+            {
+              id: input.profile.username,
+              username: input.profile.username,
+              name: input.profile.name,
+              bio: input.profile.bio,
+              location: input.profile.location,
+              website: input.profile.website,
+              profileImageUrl: input.profile.profileImageUrl,
+              bannerUrl: input.profile.bannerUrl,
+              verified: input.profile.verified,
+              followersCount: input.profile.followers,
+              followingCount: input.profile.following,
+              tweetCount: input.profile.tweetCount,
+              createdAt: input.profile.createdAt,
+            },
+            twitterUrl,
+            { source: "Twitter", userId: ctx.user.id }
+          );
+
+          await loadSemanticGraph(semanticGraph, input.contactId);
+          console.log(`[Twitter Import] Saved semantic triples for contact ${input.contactId}`);
+        } catch (error) {
+          console.error("[Twitter Import] Failed to save semantic triples:", error);
+        }
+
+        return { success: true };
+      }),
+
+    /**
+     * Analyze contact's tweets using LLM
+     * On-demand analysis that fetches recent tweets and extracts insights
+     */
+    analyzeTwitter: protectedProcedure
+      .input(z.object({
+        contactId: z.number().positive(),
+        tweetCount: z.number().min(10).max(100).default(50),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { getContactById, updateContact } = await import("./db");
+        const { getDb } = await import("./db");
+        const { twitterAnalysis, contacts } = await import("../drizzle/schema");
+        const { fetchTwitterProfileWithTweets } = await import("./_core/twitter-provider");
+        const { analyzeTweets, analysisToSemanticData } = await import("./services/twitter-analysis.service");
+        const { extendGraphWithAnalysis, transformTwitterToSemanticGraph } = await import("./_core/semantic-transformer");
+        const { loadSemanticGraph } = await import("./_core/sparql");
+        const { getContactTriples } = await import("./_core/triple-store");
+        const { eq } = await import("drizzle-orm");
+        const { TRPCError } = await import("@trpc/server");
+
+        const db = await getDb();
+        if (!db) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Database connection failed",
+          });
+        }
+
+        // Get contact's Twitter URL
+        const contact = await getContactById(input.contactId);
+        if (!contact) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Contact not found",
+          });
+        }
+
+        const twitterUrl = contact.twitterUrl || contact.twitterUsername;
+        if (!twitterUrl) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Contact does not have a Twitter URL or username",
+          });
+        }
+
+        console.log(`[Twitter Analysis] Starting analysis for contact ${input.contactId} (@${contact.twitterUsername || twitterUrl})`);
+
+        // Fetch profile and tweets
+        const { profile, tweets } = await fetchTwitterProfileWithTweets(twitterUrl, input.tweetCount);
+
+        if (!tweets || tweets.length === 0) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "No tweets found for analysis",
+          });
+        }
+
+        console.log(`[Twitter Analysis] Fetched ${tweets.length} tweets, starting LLM analysis...`);
+
+        // Analyze tweets with LLM
+        const analysis = await analyzeTweets(tweets, profile);
+
+        console.log(`[Twitter Analysis] Analysis complete. Sentiment: ${analysis.overallSentiment}, Capabilities: ${analysis.capabilities.length}, Needs: ${analysis.needs.length}`);
+
+        // Save analysis to database
+        const analysisData = {
+          contactId: input.contactId,
+          tweetCount: tweets.length,
+          analyzedTweetIds: JSON.stringify(tweets.map(t => t.id)),
+          overallSentiment: analysis.overallSentiment,
+          sentimentScore: analysis.sentimentScore,
+          opportunities: JSON.stringify(analysis.opportunities),
+          goals: JSON.stringify(analysis.goals),
+          topics: JSON.stringify(analysis.topics),
+          capabilities: JSON.stringify(analysis.capabilities),
+          needs: JSON.stringify(analysis.needs),
+          communicationStyle: analysis.communicationStyle,
+          personalityTraits: JSON.stringify(analysis.personalityTraits),
+          influenceScore: analysis.influenceScore,
+          influenceTopics: JSON.stringify(analysis.influenceTopics),
+          engagementPattern: JSON.stringify(analysis.engagementPattern),
+          lastAnalyzedAt: new Date(),
+          analysisVersion: "1.0",
+          rawAnalysis: JSON.stringify(analysis),
+        };
+
+        // Upsert analysis record
+        const existingAnalysis = await db
+          .select()
+          .from(twitterAnalysis)
+          .where(eq(twitterAnalysis.contactId, input.contactId))
+          .limit(1);
+
+        if (existingAnalysis.length > 0) {
+          await db
+            .update(twitterAnalysis)
+            .set(analysisData)
+            .where(eq(twitterAnalysis.contactId, input.contactId));
+        } else {
+          await db.insert(twitterAnalysis).values(analysisData);
+        }
+
+        // Save tweets to contact's posts field
+        await updateContact(input.contactId, {
+          posts: JSON.stringify(tweets.slice(0, 20)), // Store most recent 20
+        });
+
+        // Extend semantic graph with analysis entities
+        try {
+          const semanticData = analysisToSemanticData(analysis);
+          const existingTriples = await getContactTriples(input.contactId);
+
+          // Create base graph if no existing triples
+          let baseGraph;
+          if (existingTriples.length === 0) {
+            baseGraph = transformTwitterToSemanticGraph(profile, twitterUrl, {
+              source: "Twitter",
+              userId: ctx.user.id,
+            });
+          } else {
+            // Reconstruct graph from existing triples (simplified)
+            baseGraph = {
+              "@context": {
+                "@vocab": "https://schema.org/",
+                "prov": "http://www.w3.org/ns/prov#",
+                "dfn": "https://dealflow.network/ontology#",
+              },
+              "@graph": [{
+                "@type": "Person" as const,
+                "@id": `twitter:${profile.username}`,
+                name: profile.name,
+              }],
+            };
+          }
+
+          const extendedGraph = extendGraphWithAnalysis(baseGraph, semanticData, input.contactId);
+          await loadSemanticGraph(extendedGraph, input.contactId);
+          console.log(`[Twitter Analysis] Extended semantic graph with analysis entities`);
+        } catch (error) {
+          console.error("[Twitter Analysis] Failed to extend semantic graph:", error);
+        }
+
+        return {
+          success: true,
+          analysis: {
+            sentiment: analysis.overallSentiment,
+            sentimentScore: analysis.sentimentScore,
+            capabilities: analysis.capabilities,
+            needs: analysis.needs,
+            opportunities: analysis.opportunities,
+            topics: analysis.topics,
+            influenceScore: analysis.influenceScore,
+            communicationStyle: analysis.communicationStyle,
+          },
+          tweetCount: tweets.length,
+        };
+      }),
+
+    /**
+     * Get existing Twitter analysis for a contact
+     */
+    getTwitterAnalysis: protectedProcedure
+      .input(z.object({
+        contactId: z.number().positive(),
+      }))
+      .query(async ({ input }) => {
+        const { getDb } = await import("./db");
+        const { twitterAnalysis } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        const { TRPCError } = await import("@trpc/server");
+
+        const db = await getDb();
+        if (!db) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Database connection failed",
+          });
+        }
+
+        const [analysis] = await db
+          .select()
+          .from(twitterAnalysis)
+          .where(eq(twitterAnalysis.contactId, input.contactId))
+          .limit(1);
+
+        if (!analysis) {
+          return null;
+        }
+
+        // Parse JSON fields
+        return {
+          id: analysis.id,
+          contactId: analysis.contactId,
+          tweetCount: analysis.tweetCount,
+          overallSentiment: analysis.overallSentiment,
+          sentimentScore: analysis.sentimentScore,
+          opportunities: analysis.opportunities ? JSON.parse(analysis.opportunities) : [],
+          goals: analysis.goals ? JSON.parse(analysis.goals) : [],
+          topics: analysis.topics ? JSON.parse(analysis.topics) : [],
+          capabilities: analysis.capabilities ? JSON.parse(analysis.capabilities) : [],
+          needs: analysis.needs ? JSON.parse(analysis.needs) : [],
+          communicationStyle: analysis.communicationStyle,
+          personalityTraits: analysis.personalityTraits ? JSON.parse(analysis.personalityTraits) : [],
+          influenceScore: analysis.influenceScore,
+          influenceTopics: analysis.influenceTopics ? JSON.parse(analysis.influenceTopics) : [],
+          engagementPattern: analysis.engagementPattern ? JSON.parse(analysis.engagementPattern) : null,
+          lastAnalyzedAt: analysis.lastAnalyzedAt,
+          analysisVersion: analysis.analysisVersion,
         };
       }),
 
@@ -988,12 +1469,15 @@ export const appRouter = router({
     getContactTriples: protectedProcedure
       .input(z.object({ contactId: z.number() }))
       .query(async ({ input }) => {
-        // This is a stub - the triple-store module exists on main but not on this branch
-        // Return empty result for now
+        const { getContactTriples, groupTriplesByPredicate } = await import("./_core/triple-store");
+
+        const triples = await getContactTriples(input.contactId);
+        const grouped = groupTriplesByPredicate(triples);
+
         return {
-          tripleCount: 0,
-          triples: [],
-          grouped: {},
+          tripleCount: triples.length,
+          triples,
+          grouped,
         };
       }),
 
