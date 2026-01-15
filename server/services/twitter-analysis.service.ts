@@ -332,21 +332,44 @@ Return structured JSON analysis.`;
       throw new Error("Empty response from LLM");
     }
 
-    const analysis = JSON.parse(content) as Partial<TweetAnalysisResult>;
+    // Strip markdown code blocks if present
+    let jsonContent = content.trim();
+    if (jsonContent.startsWith("```")) {
+      jsonContent = jsonContent.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
+    }
+
+    const parsed = JSON.parse(jsonContent);
+    // Handle nested analysis key if present
+    const rawAnalysis = parsed.analysis || parsed;
+
+    // Map LLM response to our expected schema (handles different field names)
+    const capabilities = (rawAnalysis.capabilities || rawAnalysis.capabilities_expertise || []).map((c: unknown) =>
+      typeof c === "string" ? { name: c, confidence: 80 } : c
+    );
+    const needs = (rawAnalysis.needs || rawAnalysis.needs_challenges || []).map((n: unknown) =>
+      typeof n === "string" ? { name: n, urgency: "medium" as const } : n
+    );
+    const opportunities = (rawAnalysis.opportunities || rawAnalysis.collaboration_opportunities || []).map((o: unknown) =>
+      typeof o === "string" ? { title: o, confidence: 70 } : o
+    );
+    const topics = (rawAnalysis.topics || rawAnalysis.influential_topics || []).map((t: unknown) =>
+      typeof t === "string" ? { topic: t, frequency: "occasional" as const } : t
+    );
+
 
     // Merge with calculated engagement pattern
     return {
-      overallSentiment: analysis.overallSentiment || "neutral",
-      sentimentScore: analysis.sentimentScore ?? 0,
-      capabilities: analysis.capabilities || [],
-      needs: analysis.needs || [],
-      opportunities: analysis.opportunities || [],
-      goals: analysis.goals || [],
-      topics: analysis.topics || [],
-      communicationStyle: analysis.communicationStyle || "professional",
-      personalityTraits: analysis.personalityTraits || [],
-      influenceScore: analysis.influenceScore ?? 0,
-      influenceTopics: analysis.influenceTopics || [],
+      overallSentiment: rawAnalysis.overallSentiment || rawAnalysis.sentiment || "neutral",
+      sentimentScore: rawAnalysis.sentimentScore ?? 0,
+      capabilities,
+      needs,
+      opportunities,
+      goals: rawAnalysis.goals || [],
+      topics,
+      communicationStyle: rawAnalysis.communicationStyle || rawAnalysis.professional_presence?.communication_style || "professional",
+      personalityTraits: rawAnalysis.personalityTraits || [],
+      influenceScore: rawAnalysis.influenceScore ?? 50,
+      influenceTopics: rawAnalysis.influenceTopics || [],
       engagementPattern,
     };
   } catch (error) {

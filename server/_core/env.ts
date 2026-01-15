@@ -14,5 +14,5 @@ export const ENV = {
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
   // Twitter/Apify integration
   apifyApiKey: process.env.APIFY_API_KEY ?? "",
-  apifyTwitterActorId: process.env.APIFY_TWITTER_ACTOR_ID ?? "apify/twitter-scraper",
+  apifyTwitterActorId: process.env.APIFY_TWITTER_ACTOR_ID ?? "quacker/twitter-scraper",
 };

@@ -127,7 +127,7 @@ export async function fetchTwitterProfile(profileUrl: string): Promise<TwitterPr
   const username = extractUsernameFromUrl(profileUrl);
   console.log(`[Twitter Provider] Fetching profile for @${username}`);
 
-  const actorId = ENV.apifyTwitterActorId;
+  const actorId = ENV.apifyTwitterActorId.replace("/", "~");
   const apiUrl = `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items`;
 
   const response = await fetch(apiUrl, {
@@ -137,9 +137,8 @@ export async function fetchTwitterProfile(profileUrl: string): Promise<TwitterPr
       Authorization: `Bearer ${ENV.apifyApiKey}`,
     },
     body: JSON.stringify({
-      startUrls: [{ url: buildTwitterUrl(username) }],
-      tweetsDesired: 0, // Just profile, no tweets
-      proxyConfig: { useApifyProxy: true },
+      handles: [username],
+      maxItems: 1,
     }),
   });
 
@@ -182,7 +181,7 @@ export async function fetchTwitterProfileWithTweets(
   const username = extractUsernameFromUrl(profileUrl);
   console.log(`[Twitter Provider] Fetching profile and ${tweetCount} tweets for @${username}`);
 
-  const actorId = ENV.apifyTwitterActorId;
+  const actorId = ENV.apifyTwitterActorId.replace("/", "~");
   const apiUrl = `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items`;
 
   const response = await fetch(apiUrl, {
@@ -192,9 +191,8 @@ export async function fetchTwitterProfileWithTweets(
       Authorization: `Bearer ${ENV.apifyApiKey}`,
     },
     body: JSON.stringify({
-      startUrls: [{ url: buildTwitterUrl(username) }],
-      tweetsDesired: Math.min(tweetCount, 100),
-      proxyConfig: { useApifyProxy: true },
+      handles: [username],
+      maxItems: Math.min(tweetCount, 100),
     }),
   });
 
@@ -210,14 +208,15 @@ export async function fetchTwitterProfileWithTweets(
     throw new Error(`No data returned for @${username}`);
   }
 
-  // First item is typically the profile, rest are tweets
-  const rawProfile = data[0];
-  const profile = normalizeApifyProfile(rawProfile);
+  // Extract profile from first tweet's user object (quacker format)
+  const firstItem = data[0];
+  const rawUser = firstItem.user || firstItem;
+  const profile = normalizeApifyProfile(rawUser);
 
   // Extract tweets from the response
   const tweets: Tweet[] = [];
   for (const item of data) {
-    if (item.type === "tweet" || item.id_str) {
+    if (item.id_str || item.full_text) {
       const tweet = normalizeApifyTweet(item);
       if (tweet) {
         tweets.push(tweet);
