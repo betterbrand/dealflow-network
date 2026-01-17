@@ -105,20 +105,20 @@
   --chart-4: oklch(0.48 0.16 270);
   --chart-5: oklch(0.42 0.15 275);
 
-  /* Deep true black background - luxury feel */
-  --background: oklch(0.08 0.005 50);
-  --foreground: oklch(0.92 0.01 55);
+  /* Deep true black background with warmth - luxury feel */
+  --background: oklch(0.09 0.006 50);
+  --foreground: oklch(0.96 0.01 55);
 
-  /* Card with subtle warm undertone */
-  --card: oklch(0.12 0.008 50);
+  /* Card with better separation from background */
+  --card: oklch(0.16 0.008 50);
   --card-foreground: oklch(0.92 0.01 55);
-  --popover: oklch(0.12 0.008 50);
+  --popover: oklch(0.18 0.008 50);
   --popover-foreground: oklch(0.92 0.01 55);
 
   --secondary: oklch(0.16 0.008 50);
   --secondary-foreground: oklch(0.75 0.01 55);
   --muted: oklch(0.20 0.008 50);
-  --muted-foreground: oklch(0.60 0.02 55);
+  --muted-foreground: oklch(0.65 0.02 55);
 
   /* Blue accent for dark mode */
   --accent: oklch(0.22 0.06 260);
@@ -127,9 +127,9 @@
   --destructive: oklch(0.65 0.20 25);
   --destructive-foreground: oklch(0.98 0.01 25);
 
-  /* Subtle cool borders */
-  --border: oklch(1 0 0 / 8%);
-  --input: oklch(1 0 0 / 12%);
+  /* Visible borders with proper contrast (WCAG 3:1) */
+  --border: oklch(0.25 0.01 240);
+  --input: oklch(0.28 0.01 240);
   --ring: oklch(0.58 0.17 260); /* Sapphire blue ring */
 
   /* Sidebar with depth */
@@ -137,7 +137,7 @@
   --sidebar-foreground: oklch(0.92 0.01 55);
   --sidebar-accent: oklch(0.20 0.05 260);
   --sidebar-accent-foreground: oklch(0.88 0.08 260);
-  --sidebar-border: oklch(1 0 0 / 6%);
+  --sidebar-border: oklch(0.22 0.01 240);
   --sidebar-ring: oklch(0.58 0.17 260);
 
   /* Elevation system - deep shadows with subtle warmth */

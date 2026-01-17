@@ -106,12 +106,12 @@ export default function SemanticGraph() {
       // Determine entity type
       const typeField = entity["22-rdf-syntax-ns#type"] || entity.type;
       let entityType: "Person" | "Organization" | "EducationalOrganization" | "Activity" = "Person";
-      let color = "#3b82f6"; // Default blue
+      let color = "#5b7ff8"; // Default Sapphire Blue (brand primary)
 
       if (typeof typeField === "string") {
         if (typeField.includes("Person")) {
           entityType = "Person";
-          color = "#3b82f6"; // Blue
+          color = "#5b7ff8"; // Sapphire Blue (brand primary)
         } else if (typeField.includes("Organization")) {
           entityType = "Organization";
           color = "#10b981"; // Green
@@ -231,8 +231,8 @@ export default function SemanticGraph() {
       selector: "edge:selected",
       style: {
         width: 3,
-        "line-color": "#3b82f6",
-        "target-arrow-color": "#3b82f6",
+        "line-color": "#5b7ff8", // Sapphire Blue (brand primary)
+        "target-arrow-color": "#5b7ff8", // Sapphire Blue (brand primary)
       },
     },
   ];
@@ -273,14 +273,14 @@ export default function SemanticGraph() {
         "absolute z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 text-sm pointer-events-none max-w-xs";
 
       let tooltipContent = `<div class="font-semibold text-gray-900 dark:text-white">${data.label}</div>`;
-      tooltipContent += `<div class="text-gray-600 dark:text-gray-400 text-xs mt-1">Type: ${data.type}</div>`;
+      tooltipContent += `<div class="text-muted-foreground text-xs mt-1">Type: ${data.type}</div>`;
 
       if (data.details) {
         if (data.details.jobTitle) {
-          tooltipContent += `<div class="text-gray-500 dark:text-gray-500 text-xs">${data.details.jobTitle}</div>`;
+          tooltipContent += `<div class="text-muted-foreground text-xs">${data.details.jobTitle}</div>`;
         }
         if (data.details.startDate || data.details.endDate) {
-          tooltipContent += `<div class="text-gray-500 dark:text-gray-500 text-xs">${data.details.startDate || ''} - ${data.details.endDate || 'Present'}</div>`;
+          tooltipContent += `<div class="text-muted-foreground text-xs">${data.details.startDate || ''} - ${data.details.endDate || 'Present'}</div>`;
         }
       }
 
